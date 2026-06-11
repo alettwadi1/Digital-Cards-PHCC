@@ -1438,18 +1438,16 @@ function renderPatientDetails(p) {
   document.getElementById('digital-card-container').innerHTML = `
     <div class="digital-card success-anim" style="padding:1.25rem 1.25rem 1rem">
 
-      <!-- Top row: Logo left, org info center-right -->
+      <!-- Top row: Logo left, org info right -->
       <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1rem">
         <!-- Logo top-left -->
         <img src="${LOGO}" style="width:52px;height:52px;border-radius:10px;object-fit:cover;background:rgba(255,255,255,0.08);flex-shrink:0">
-        <!-- Org info: centered -->
-        <div style="flex:1;text-align:center;padding:0 10px">
+        <!-- Org info right -->
+        <div style="text-align:right">
           <div style="font-size:0.85rem;font-weight:700;color:#fff;line-height:1.4">تجمع جازان الصحي</div>
-          <div style="font-size:0.75rem;font-weight:500;color:#fff;margin-top:2px">القطاع الشمالي</div>
-          <div style="font-size:0.7rem;font-weight:500;color:#fff;margin-top:1px">مركز صحي الشقيق</div>
+          <div style="font-size:0.75rem;font-weight:500;color:#fff;margin-top:2px;text-align:center">القطاع الشمالي</div>
+          <div style="font-size:0.7rem;font-weight:500;color:#fff;margin-top:1px;text-align:center">مركز صحي الشقيق</div>
         </div>
-        <!-- spacer to balance logo -->
-        <div style="width:52px;flex-shrink:0"></div>
       </div>
 
       <!-- Patient Name -->
@@ -1464,8 +1462,8 @@ function renderPatientDetails(p) {
         </div>
         <!-- رقم الجوال — right aligned -->
         <div style="flex:1;text-align:right">
-          <div style="font-size:0.62rem;color:rgba(255,255,255,0.55);margin-bottom:2px">رقم الجوال</div>
-          <div style="font-size:0.82rem;color:#fff;font-family:monospace">${p.mobile_no || '---'}</div>
+          <div style="font-size:0.62rem;color:rgba(255,255,255,0.55);margin-bottom:2px;text-align:center">رقم الجوال</div>
+          <div style="font-size:0.82rem;color:#fff;font-family:monospace;text-align:center">${p.mobile_no || '---'}</div>
         </div>
       </div>
 
