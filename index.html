@@ -1326,16 +1326,16 @@ let state = {
 };
 
 // Supabase client
-let supabase = null;
+let sbClient = null;
 
 // ══════════════════════════════════════════ INIT ══
 
 window.addEventListener('load', () => {
-  // Init Supabase after all scripts loaded
   if (!DEMO_MODE) {
     try {
-      if (window.supabase && window.supabase.createClient) {
-        supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      const sb = window.supabase;
+      if (sb && sb.createClient) {
+        sbClient = sb.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
       }
     } catch(e) { console.error('Supabase init:', e); }
   }
@@ -1398,7 +1398,7 @@ async function searchPatient() {
   if (DEMO_MODE) {
     patient = state.allPatients.find(p => p.id_no === idNo && p.dob_g === dob);
   } else {
-    const { data } = await supabase.from('patients').select('*').eq('id_no', idNo).eq('dob_g', dob).single();
+    const { data } = await sbClient.from('patients').select('*').eq('id_no', idNo).eq('dob_g', dob).single();
     patient = data;
   }
 
