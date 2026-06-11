@@ -11,8 +11,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
@@ -929,7 +929,7 @@ input:checked + .slider::before { transform: translateX(20px); }
     <div class="card-codes" id="codes-section" style="display:none">
       <div class="code-section">
         <label>📷 رمز QR</label>
-        <canvas id="qr-canvas" width="110" height="110"></canvas>
+        <div id="qr-container" style="display:flex;justify-content:center"></div>
       </div>
       <div class="code-section">
         <label>📊 الباركود</label>
@@ -1449,10 +1449,16 @@ function renderPatientDetails(p) {
 
   // QR Code
   document.getElementById('codes-section').style.display = 'grid';
-  const canvas = document.getElementById('qr-canvas');
-  QRCode.toCanvas(canvas, JSON.stringify({ id: p.id_no, name: p.full_name, dob: p.dob_g }), {
-    width: 110, margin: 1, color: { dark: '#0D4B8F', light: '#ffffff' }
-  });
+  const qrContainer = document.getElementById('qr-container');
+  qrContainer.innerHTML = '';
+  try {
+    new QRCode(qrContainer, {
+      text: JSON.stringify({ id: p.id_no, name: p.full_name, dob: p.dob_g }),
+      width: 110, height: 110,
+      colorDark: '#0D4B8F', colorLight: '#ffffff',
+      correctLevel: QRCode.CorrectLevel.M
+    });
+  } catch(e) { qrContainer.innerHTML = '<div style="font-size:0.75rem;color:#888">QR غير متاح</div>'; }
 
   // Barcode
   try {
