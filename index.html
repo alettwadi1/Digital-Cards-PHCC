@@ -67,6 +67,7 @@ body {
 /* ─── SCREENS ─── */
 .screen { display: none; min-height: 100vh; }
 .screen.active { display: flex; flex-direction: column; }
+#splash:not(.active) { display: none !important; }
 
 /* ─── SPLASH ─── */
 #splash {
@@ -1329,7 +1330,7 @@ document.addEventListener('DOMContentLoaded', () => {
   showScreen('splash');
 
   setTimeout(() => {
-    showScreen('patient-screen');
+    try { showScreen('patient-screen'); } catch(e) {}
     try {
       const saved = sessionStorage.getItem('currentPatient');
       if (saved) {
@@ -1340,8 +1341,16 @@ document.addEventListener('DOMContentLoaded', () => {
         switchTab('details', document.getElementById('tab-details'));
       }
     } catch(e) {}
-    loadNotificationBadge();
+    try { loadNotificationBadge(); } catch(e) {}
   }, 2600);
+
+  // Fallback: force transition after 3.5s regardless
+  setTimeout(() => {
+    const splash = document.getElementById('splash');
+    if (splash && splash.classList.contains('active')) {
+      try { showScreen('patient-screen'); } catch(e) {}
+    }
+  }, 3500);
 });
 
 function showScreen(id) {
