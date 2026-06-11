@@ -1336,7 +1336,22 @@ window.addEventListener('load', () => {
   showScreen('splash');
   setTimeout(() => {
     showScreen('patient-screen');
-    loadNotificationBadge();
+    // ── استعادة بيانات المريض من الجلسة السابقة ──
+    try {
+      const saved = sessionStorage.getItem('currentPatient');
+      if (saved) {
+        const patient = JSON.parse(saved);
+        state.currentPatient = patient;
+        renderPatientDetails(patient);
+        // أظهر تبويب بطاقتي مباشرة
+        document.getElementById('tab-details').style.display = 'flex';
+        const detailsTab = document.getElementById('tab-details');
+        switchTab('details', detailsTab);
+        loadNotificationBadge();
+      } else {
+        loadNotificationBadge();
+      }
+    } catch(e) { loadNotificationBadge(); }
   }, 2500);
 });
 
@@ -1402,6 +1417,8 @@ async function searchPatient() {
 
   if (patient) {
     state.currentPatient = patient;
+    // ── حفظ في الجلسة ──
+    try { sessionStorage.setItem('currentPatient', JSON.stringify(patient)); } catch(e) {}
     renderPatientDetails(patient);
     // Show details tab
     document.getElementById('tab-details').style.display = 'flex';
@@ -1421,32 +1438,34 @@ function renderPatientDetails(p) {
   document.getElementById('digital-card-container').innerHTML = `
     <div class="digital-card success-anim" style="padding:1.25rem 1.25rem 1rem">
 
-      <!-- Top row: Logo left, name right -->
+      <!-- Top row: Logo left, org info center-right -->
       <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1rem">
         <!-- Logo top-left -->
-        <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
-          <img src="${LOGO}" style="width:52px;height:52px;border-radius:10px;object-fit:cover;background:rgba(255,255,255,0.08)">
+        <img src="${LOGO}" style="width:52px;height:52px;border-radius:10px;object-fit:cover;background:rgba(255,255,255,0.08);flex-shrink:0">
+        <!-- Org info: centered -->
+        <div style="flex:1;text-align:center;padding:0 10px">
+          <div style="font-size:0.85rem;font-weight:700;color:#fff;line-height:1.4">تجمع جازان الصحي</div>
+          <div style="font-size:0.75rem;font-weight:500;color:#fff;margin-top:2px">القطاع الشمالي</div>
+          <div style="font-size:0.7rem;font-weight:500;color:#fff;margin-top:1px">مركز صحي الشقيق</div>
         </div>
-        <!-- Org info top-right -->
-        <div style="text-align:right">
-          <div style="font-size:0.82rem;font-weight:600;color:#fff;line-height:1.3">تجمع جازان الصحي</div>
-          <div style="font-size:0.72rem;color:rgba(255,255,255,0.65);margin-top:2px">القطاع الشمالي</div>
-          <div style="font-size:0.68rem;color:rgba(255,255,255,0.5);margin-top:1px">مركز صحي الشقيق</div>
-        </div>
+        <!-- spacer to balance logo -->
+        <div style="width:52px;flex-shrink:0"></div>
       </div>
 
       <!-- Patient Name -->
       <div style="font-size:1.15rem;font-weight:700;color:#fff;text-align:right;margin-bottom:0.6rem;letter-spacing:0.3px">${p.full_name}</div>
 
-      <!-- Info row: dob + mobile -->
-      <div style="display:flex;justify-content:space-between;margin-bottom:1.1rem">
-        <div style="text-align:left">
-          <div style="font-size:0.62rem;color:rgba(255,255,255,0.55);margin-bottom:2px">الجوال</div>
-          <div style="font-size:0.82rem;color:#fff;font-family:monospace">${p.mobile_no || '---'}</div>
-        </div>
-        <div style="text-align:right">
+      <!-- Info row: dob center, mobile right -->
+      <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:1.1rem">
+        <!-- تاريخ الميلاد — centered -->
+        <div style="flex:1;text-align:center">
           <div style="font-size:0.62rem;color:rgba(255,255,255,0.55);margin-bottom:2px">تاريخ الميلاد</div>
           <div style="font-size:0.82rem;color:#fff;font-family:monospace">${p.dob_g}</div>
+        </div>
+        <!-- رقم الجوال — right aligned -->
+        <div style="flex:1;text-align:right">
+          <div style="font-size:0.62rem;color:rgba(255,255,255,0.55);margin-bottom:2px">رقم الجوال</div>
+          <div style="font-size:0.82rem;color:#fff;font-family:monospace">${p.mobile_no || '---'}</div>
         </div>
       </div>
 
@@ -1518,6 +1537,7 @@ function renderPatientDetails(p) {
 
 function resetSearch() {
   state.currentPatient = null;
+  try { sessionStorage.removeItem('currentPatient'); } catch(e) {}
   document.getElementById('search-id').value = '';
   document.getElementById('search-dob').value = '';
   document.getElementById('search-alert').innerHTML = '';
