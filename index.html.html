@@ -1,0 +1,1975 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0D4B8F">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>بطاقة المراجع الرقمية - تجمع جازان الصحي</title>
+<link rel="manifest" href="manifest.json">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+<style>
+:root {
+  --primary: #0D4B8F;
+  --primary-light: #1565C0;
+  --primary-dark: #083670;
+  --primary-50: #E3F0FF;
+  --primary-100: #B3D1FA;
+  --accent: #00897B;
+  --accent-light: #26A69A;
+  --accent-50: #E0F2F1;
+  --gold: #F59E0B;
+  --gold-50: #FFF8E1;
+  --danger: #DC2626;
+  --danger-50: #FEF2F2;
+  --success: #16A34A;
+  --success-50: #F0FDF4;
+  --warning: #D97706;
+  --warning-50: #FFFBEB;
+  --bg: #F4F7FC;
+  --surface: #FFFFFF;
+  --surface-2: #F8FAFF;
+  --text-primary: #0F172A;
+  --text-secondary: #475569;
+  --text-muted: #94A3B8;
+  --border: #E2E8F0;
+  --border-strong: #CBD5E1;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --shadow-sm: 0 1px 3px rgba(13,75,143,0.08);
+  --shadow-md: 0 4px 16px rgba(13,75,143,0.12);
+  --shadow-lg: 0 8px 32px rgba(13,75,143,0.16);
+  --font: 'IBM Plex Sans Arabic', system-ui, sans-serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text-primary);
+  min-height: 100vh;
+  direction: rtl;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+/* ─── SCREENS ─── */
+.screen { display: none; min-height: 100vh; }
+.screen.active { display: flex; flex-direction: column; }
+
+/* ─── SPLASH ─── */
+#splash {
+  background: linear-gradient(160deg, #0D4B8F 0%, #083670 50%, #052652 100%);
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 2rem;
+}
+.splash-logo {
+  width: 100px;
+  height: 100px;
+  background: rgba(255,255,255,0.12);
+  border-radius: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 1.5rem;
+  font-size: 48px;
+  border: 1px solid rgba(255,255,255,0.2);
+}
+.splash h1 { color: #fff; font-size: 1.8rem; font-weight: 700; margin-bottom: 0.5rem; }
+.splash p { color: rgba(255,255,255,0.7); font-size: 0.95rem; margin-bottom: 3rem; }
+.splash-progress {
+  width: 200px;
+  height: 3px;
+  background: rgba(255,255,255,0.2);
+  border-radius: 2px;
+  margin: 0 auto;
+  overflow: hidden;
+}
+.splash-progress-bar {
+  height: 100%;
+  background: #fff;
+  border-radius: 2px;
+  animation: progress 2s ease-in-out forwards;
+}
+@keyframes progress { from{width:0%} to{width:100%} }
+
+/* ─── TOP BAR ─── */
+.topbar {
+  background: var(--primary);
+  padding: 0.75rem 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 2px 12px rgba(13,75,143,0.3);
+}
+.topbar-logo { display: flex; align-items: center; gap: 10px; }
+.topbar-icon {
+  width: 36px; height: 36px;
+  background: rgba(255,255,255,0.15);
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px;
+}
+.topbar-title { color: #fff; font-weight: 600; font-size: 0.95rem; line-height: 1.2; }
+.topbar-sub { color: rgba(255,255,255,0.7); font-size: 0.72rem; }
+.topbar-actions { display: flex; gap: 8px; }
+.topbar-btn {
+  background: rgba(255,255,255,0.12);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: #fff;
+  padding: 6px 12px;
+  font-family: var(--font);
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: background 0.2s;
+  display: flex; align-items: center; gap: 5px;
+}
+.topbar-btn:hover { background: rgba(255,255,255,0.22); }
+
+/* ─── TAB BAR ─── */
+.tab-bar {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  padding: 0 1rem;
+  position: sticky;
+  top: 60px;
+  z-index: 99;
+}
+.tab-item {
+  flex: 1;
+  padding: 0.85rem 0.5rem;
+  text-align: center;
+  cursor: pointer;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  border-bottom: 3px solid transparent;
+  transition: all 0.2s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font);
+  background: none;
+  border-top: none;
+  border-right: none;
+  border-left: none;
+  position: relative;
+}
+.tab-item.active { color: var(--primary); border-bottom-color: var(--primary); }
+.tab-icon { font-size: 1.2rem; }
+.badge {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(12px);
+  background: var(--danger);
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 2px 5px;
+  border-radius: 10px;
+  min-width: 18px;
+  text-align: center;
+  font-family: var(--font);
+}
+
+/* ─── CONTENT ─── */
+.content { flex: 1; padding: 1.25rem; max-width: 640px; margin: 0 auto; width: 100%; }
+
+/* ─── CARDS ─── */
+.card {
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  padding: 1.25rem;
+  box-shadow: var(--shadow-sm);
+  margin-bottom: 1rem;
+}
+.card-header { display: flex; align-items: center; gap: 10px; margin-bottom: 1.25rem; }
+.card-icon {
+  width: 42px; height: 42px;
+  border-radius: var(--radius-sm);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.3rem;
+  flex-shrink: 0;
+}
+.card-title { font-weight: 600; font-size: 1rem; color: var(--text-primary); }
+.card-sub { font-size: 0.8rem; color: var(--text-secondary); }
+
+/* ─── FORM ─── */
+.form-group { margin-bottom: 1.1rem; }
+label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+input[type=text], input[type=number], input[type=date],
+input[type=password], input[type=email], select, textarea {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: var(--font);
+  font-size: 0.95rem;
+  color: var(--text-primary);
+  background: var(--surface);
+  transition: border-color 0.2s, box-shadow 0.2s;
+  direction: rtl;
+}
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-50);
+}
+input::placeholder { color: var(--text-muted); }
+
+/* ─── BUTTONS ─── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0.8rem 1.5rem;
+  border-radius: var(--radius-sm);
+  font-family: var(--font);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+  width: 100%;
+  text-decoration: none;
+}
+.btn-primary { background: var(--primary); color: #fff; }
+.btn-primary:hover { background: var(--primary-light); transform: translateY(-1px); box-shadow: var(--shadow-md); }
+.btn-secondary { background: var(--primary-50); color: var(--primary); border: 1.5px solid var(--primary-100); }
+.btn-secondary:hover { background: var(--primary-100); }
+.btn-accent { background: var(--accent); color: #fff; }
+.btn-accent:hover { background: var(--accent-light); }
+.btn-sm { padding: 0.5rem 1rem; font-size: 0.82rem; width: auto; }
+.btn-outline { background: transparent; border: 1.5px solid var(--border-strong); color: var(--text-secondary); }
+.btn-outline:hover { border-color: var(--primary); color: var(--primary); background: var(--primary-50); }
+.btn-danger { background: var(--danger); color: #fff; }
+.btn-success { background: var(--success); color: #fff; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; }
+
+/* ─── HERO SEARCH CARD ─── */
+.hero-card {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+  border-radius: var(--radius-xl);
+  padding: 2rem 1.5rem;
+  color: #fff;
+  margin-bottom: 1.5rem;
+  position: relative;
+  overflow: hidden;
+}
+.hero-card::before {
+  content: '';
+  position: absolute;
+  top: -40px;
+  left: -40px;
+  width: 200px;
+  height: 200px;
+  background: rgba(255,255,255,0.04);
+  border-radius: 50%;
+}
+.hero-card::after {
+  content: '';
+  position: absolute;
+  bottom: -60px;
+  right: -30px;
+  width: 240px;
+  height: 240px;
+  background: rgba(255,255,255,0.03);
+  border-radius: 50%;
+}
+.hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255,255,255,0.12);
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 20px;
+  padding: 4px 12px;
+  font-size: 0.78rem;
+  margin-bottom: 1rem;
+}
+.hero-card h2 { font-size: 1.5rem; font-weight: 700; margin-bottom: 0.3rem; }
+.hero-card p { font-size: 0.88rem; opacity: 0.8; margin-bottom: 1.5rem; }
+.search-form { position: relative; z-index: 1; }
+.search-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+.search-form input {
+  background: rgba(255,255,255,0.12);
+  border: 1.5px solid rgba(255,255,255,0.25);
+  color: #fff;
+  border-radius: var(--radius-sm);
+}
+.search-form input::placeholder { color: rgba(255,255,255,0.5); }
+.search-form input:focus { background: rgba(255,255,255,0.18); border-color: rgba(255,255,255,0.5); box-shadow: none; }
+.btn-white { background: #fff; color: var(--primary); font-weight: 700; }
+.btn-white:hover { background: rgba(255,255,255,0.9); transform: translateY(-1px); }
+.btn-white:disabled { opacity: 0.7; cursor: not-allowed; transform: none; }
+
+/* ─── DIGITAL HEALTH CARD ─── */
+.digital-card {
+  background: linear-gradient(135deg, #0D4B8F 0%, #052652 60%, #083670 100%);
+  border-radius: var(--radius-xl);
+  padding: 1.5rem;
+  color: #fff;
+  position: relative;
+  overflow: hidden;
+  margin-bottom: 1rem;
+}
+.digital-card::before {
+  content: '';
+  position: absolute;
+  top: -30px; right: -30px;
+  width: 180px; height: 180px;
+  border: 40px solid rgba(255,255,255,0.06);
+  border-radius: 50%;
+}
+.digital-card::after {
+  content: '';
+  position: absolute;
+  bottom: -50px; left: -20px;
+  width: 200px; height: 200px;
+  border: 50px solid rgba(255,255,255,0.04);
+  border-radius: 50%;
+}
+.card-brand {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+}
+.card-brand-name { font-size: 0.75rem; opacity: 0.7; font-weight: 400; }
+.card-brand-logo {
+  background: rgba(255,255,255,0.15);
+  border-radius: 10px;
+  padding: 6px 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  display: flex; align-items: center; gap: 6px;
+}
+.card-chip {
+  width: 44px; height: 34px;
+  background: linear-gradient(135deg, #F59E0B, #D97706);
+  border-radius: 6px;
+  margin-bottom: 1.2rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+.card-name { font-size: 1.1rem; font-weight: 600; margin-bottom: 0.3rem; letter-spacing: 0.3px; }
+.card-info-row { display: flex; gap: 1.5rem; margin-top: 0.8rem; }
+.card-info-item label { font-size: 0.65rem; opacity: 0.6; display: block; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 2px; }
+.card-info-item span { font-size: 0.85rem; font-weight: 500; font-family: 'Courier New', monospace; }
+.card-number { font-size: 0.78rem; letter-spacing: 2px; opacity: 0.9; font-family: 'Courier New', monospace; }
+.card-codes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  background: var(--surface);
+  border-radius: var(--radius-md);
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+.code-section { text-align: center; }
+.code-section label { font-size: 0.75rem; color: var(--text-secondary); display: block; margin-bottom: 8px; font-weight: 500; }
+canvas { border-radius: var(--radius-sm); }
+
+/* ─── PATIENT INFO ROWS ─── */
+.info-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.85rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.info-row:last-child { border-bottom: none; }
+.info-label { display: flex; align-items: center; gap: 8px; color: var(--text-secondary); font-size: 0.85rem; }
+.info-icon {
+  width: 30px; height: 30px;
+  background: var(--primary-50);
+  border-radius: var(--radius-sm);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.9rem;
+}
+.info-value { font-weight: 600; font-size: 0.9rem; color: var(--text-primary); }
+
+/* ─── NOTIFICATIONS ─── */
+.notif-item {
+  display: flex;
+  gap: 12px;
+  padding: 1rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  margin-bottom: 10px;
+  background: var(--surface);
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+}
+.notif-item.unread {
+  border-right: 3px solid var(--primary);
+  background: var(--surface-2);
+}
+.notif-item:hover { border-color: var(--primary-100); box-shadow: var(--shadow-sm); }
+.notif-dot {
+  width: 8px; height: 8px;
+  background: var(--primary);
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 6px;
+}
+.notif-dot.read { background: var(--text-muted); }
+.notif-title { font-weight: 600; font-size: 0.9rem; color: var(--text-primary); margin-bottom: 4px; }
+.notif-msg { font-size: 0.82rem; color: var(--text-secondary); line-height: 1.5; }
+.notif-date { font-size: 0.75rem; color: var(--text-muted); margin-top: 6px; display: flex; align-items: center; gap: 4px; }
+
+/* ─── WALLET BUTTONS ─── */
+.wallet-section { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 1rem; }
+.wallet-btn {
+  display: flex; align-items: center; justify-content: center;
+  gap: 8px; padding: 0.9rem;
+  border-radius: var(--radius-md);
+  font-family: var(--font); font-size: 0.85rem; font-weight: 600;
+  cursor: pointer; border: none; transition: all 0.2s;
+}
+.wallet-apple { background: #000; color: #fff; }
+.wallet-apple:hover { background: #1a1a1a; transform: translateY(-1px); }
+.wallet-google {
+  background: #fff;
+  color: #3C4043;
+  border: 1.5px solid var(--border-strong);
+}
+.wallet-google:hover { background: #F8F9FA; transform: translateY(-1px); }
+
+/* ─── EMPTY STATE ─── */
+.empty-state {
+  text-align: center;
+  padding: 3rem 1.5rem;
+  color: var(--text-secondary);
+}
+.empty-icon { font-size: 3rem; margin-bottom: 1rem; opacity: 0.4; }
+.empty-state h3 { font-size: 1rem; margin-bottom: 0.5rem; color: var(--text-primary); }
+.empty-state p { font-size: 0.85rem; }
+
+/* ─── ALERT ─── */
+.alert {
+  padding: 0.9rem 1rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.88rem;
+  display: flex; align-items: flex-start; gap: 8px;
+  margin-bottom: 1rem;
+}
+.alert-error { background: var(--danger-50); color: #991B1B; border: 1px solid #FECACA; }
+.alert-success { background: var(--success-50); color: #14532D; border: 1px solid #BBF7D0; }
+.alert-info { background: var(--primary-50); color: var(--primary-dark); border: 1px solid var(--primary-100); }
+.alert-warning { background: var(--warning-50); color: #78350F; border: 1px solid #FDE68A; }
+
+/* ─── ADMIN LAYOUT ─── */
+#admin-screen .topbar { background: #1A1A2E; }
+.admin-sidebar {
+  width: 240px;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  padding: 1.25rem 1rem;
+  flex-shrink: 0;
+}
+.admin-body { display: flex; flex: 1; min-height: calc(100vh - 60px); }
+.admin-main { flex: 1; padding: 1.5rem; overflow-y: auto; }
+.sidebar-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer; font-size: 0.9rem;
+  color: var(--text-secondary);
+  transition: all 0.2s;
+  margin-bottom: 4px;
+  background: none; border: none;
+  width: 100%; text-align: right;
+  font-family: var(--font);
+}
+.sidebar-item:hover { background: var(--bg); color: var(--primary); }
+.sidebar-item.active { background: var(--primary-50); color: var(--primary); font-weight: 600; }
+.sidebar-icon { font-size: 1.1rem; }
+.sidebar-section {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-muted);
+  padding: 0.5rem 1rem;
+  margin: 0.5rem 0 0.25rem;
+}
+
+/* ─── DASHBOARD STATS ─── */
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+.stat-card {
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+}
+.stat-label { font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+.stat-value { font-size: 1.8rem; font-weight: 700; line-height: 1; margin-bottom: 4px; }
+.stat-change { font-size: 0.75rem; color: var(--success); display: flex; align-items: center; gap: 3px; }
+.stat-primary .stat-value { color: var(--primary); }
+.stat-accent .stat-value { color: var(--accent); }
+.stat-gold .stat-value { color: var(--gold); }
+.stat-danger .stat-value { color: var(--danger); }
+
+/* ─── TABLE ─── */
+.table-wrapper { overflow-x: auto; border-radius: var(--radius-md); border: 1px solid var(--border); }
+table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+thead { background: var(--bg); }
+th {
+  padding: 0.85rem 1rem;
+  text-align: right;
+  font-weight: 600;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid var(--border);
+}
+td {
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-primary);
+  vertical-align: middle;
+}
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: var(--bg); }
+
+/* ─── UPLOAD ─── */
+.upload-zone {
+  border: 2px dashed var(--border-strong);
+  border-radius: var(--radius-lg);
+  padding: 3rem 1.5rem;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: var(--surface);
+}
+.upload-zone:hover, .upload-zone.drag-over {
+  border-color: var(--primary);
+  background: var(--primary-50);
+}
+.upload-icon { font-size: 3rem; margin-bottom: 1rem; opacity: 0.5; }
+.upload-text { font-size: 0.9rem; color: var(--text-secondary); }
+.upload-text strong { color: var(--primary); }
+.progress-bar {
+  width: 100%;
+  height: 8px;
+  background: var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+  margin: 0.5rem 0;
+}
+.progress-fill {
+  height: 100%;
+  background: var(--primary);
+  border-radius: 4px;
+  transition: width 0.3s;
+}
+
+/* ─── REPORT CARD ─── */
+.report-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 1rem 0; }
+.report-item {
+  background: var(--bg);
+  border-radius: var(--radius-sm);
+  padding: 1rem;
+  text-align: center;
+}
+.report-num { font-size: 1.6rem; font-weight: 700; display: block; }
+.report-lbl { font-size: 0.78rem; color: var(--text-secondary); margin-top: 2px; }
+.report-new .report-num { color: var(--success); }
+.report-upd .report-num { color: var(--primary); }
+.report-skip .report-num { color: var(--warning); }
+.report-err .report-num { color: var(--danger); }
+
+/* ─── CHIP / TAG ─── */
+.chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+.chip-primary { background: var(--primary-50); color: var(--primary); }
+.chip-success { background: var(--success-50); color: var(--success); }
+.chip-danger { background: var(--danger-50); color: var(--danger); }
+.chip-warning { background: var(--warning-50); color: var(--warning); }
+
+/* ─── PAGINATION ─── */
+.pagination { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 1.25rem; }
+.page-btn {
+  width: 34px; height: 34px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  transition: all 0.2s;
+  display: flex; align-items: center; justify-content: center;
+}
+.page-btn:hover, .page-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+/* ─── LOGIN ─── */
+#login-screen {
+  background: linear-gradient(160deg, #1A1A2E 0%, #16213E 50%, #0F3460 100%);
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+}
+.login-box {
+  background: var(--surface);
+  border-radius: var(--radius-xl);
+  padding: 2.5rem 2rem;
+  width: 100%;
+  max-width: 400px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+}
+.login-logo { text-align: center; margin-bottom: 2rem; }
+.login-logo-icon {
+  width: 72px; height: 72px;
+  background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+  border-radius: 20px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 32px; margin: 0 auto 1rem;
+  box-shadow: 0 8px 24px rgba(13,75,143,0.3);
+}
+.login-box h2 { font-size: 1.4rem; font-weight: 700; margin-bottom: 0.25rem; text-align: center; }
+.login-box p { font-size: 0.85rem; color: var(--text-secondary); text-align: center; margin-bottom: 2rem; }
+
+/* ─── NOTIFICATION COMPOSE ─── */
+.recipient-selector {
+  display: flex; gap: 8px; margin-bottom: 1rem; flex-wrap: wrap;
+}
+.recipient-chip {
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 0.82rem;
+  cursor: pointer;
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-family: var(--font);
+  transition: all 0.2s;
+}
+.recipient-chip.active { background: var(--primary-50); color: var(--primary); border-color: var(--primary-100); font-weight: 600; }
+
+/* ─── SEARCH BAR ─── */
+.search-bar { position: relative; margin-bottom: 1.25rem; }
+.search-bar input { padding-right: 2.75rem; }
+.search-bar-icon { position: absolute; right: 0.85rem; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 1rem; }
+
+/* ─── ADMIN TABS ─── */
+.admin-tabs { display: none; }
+
+/* ─── MODAL ─── */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 1000;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+}
+.modal-overlay.open { display: flex; }
+.modal {
+  background: var(--surface);
+  border-radius: var(--radius-xl);
+  padding: 2rem;
+  width: 100%;
+  max-width: 480px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+}
+.modal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 1.5rem;
+}
+.modal-title { font-size: 1.1rem; font-weight: 700; }
+.modal-close {
+  background: var(--bg); border: none; cursor: pointer;
+  width: 32px; height: 32px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.2rem; color: var(--text-secondary);
+  transition: background 0.2s; font-family: var(--font);
+}
+.modal-close:hover { background: var(--border); }
+
+/* ─── RESPONSIVE ─── */
+@media (max-width: 640px) {
+  .admin-sidebar { display: none; }
+  .stats-grid { grid-template-columns: repeat(2, 1fr); }
+  .search-row { grid-template-columns: 1fr; }
+  .wallet-section { grid-template-columns: 1fr; }
+}
+@media (min-width: 768px) {
+  .content { padding: 1.5rem 2rem; }
+  .hero-card h2 { font-size: 1.8rem; }
+}
+
+/* ─── LOADING ─── */
+.loading-spinner {
+  width: 20px; height: 20px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  display: inline-block;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading-spinner-dark {
+  border: 2px solid var(--border);
+  border-top-color: var(--primary);
+}
+
+/* ─── SWITCH ─── */
+.switch { position: relative; display: inline-block; width: 44px; height: 24px; }
+.switch input { opacity: 0; width: 0; height: 0; }
+.slider {
+  position: absolute; cursor: pointer;
+  inset: 0; background: var(--border-strong);
+  border-radius: 24px; transition: 0.3s;
+}
+.slider::before {
+  content: '';
+  position: absolute;
+  width: 18px; height: 18px;
+  left: 3px; bottom: 3px;
+  background: #fff;
+  border-radius: 50%;
+  transition: 0.3s;
+}
+input:checked + .slider { background: var(--primary); }
+input:checked + .slider::before { transform: translateX(20px); }
+
+/* ─── SECTION HEADING ─── */
+.section-heading {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 1rem;
+}
+.section-heading h2 { font-size: 1.05rem; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+
+.divider { height: 1px; background: var(--border); margin: 1.25rem 0; }
+
+/* ─── ADMIN PAGES ─── */
+.admin-page { display: none; }
+.admin-page.active { display: block; }
+
+/* success animation */
+@keyframes scaleIn {
+  from { transform: scale(0.8); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+.success-anim { animation: scaleIn 0.4s ease; }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════ SPLASH ═══ -->
+<div id="splash" class="screen active">
+  <div class="splash-logo">🏥</div>
+  <h1>بطاقة المراجع الرقمية</h1>
+  <p>تجمع جازان الصحي</p>
+  <div class="splash-progress"><div class="splash-progress-bar"></div></div>
+</div>
+
+<!-- ═══════════════════════════════════════════ LOGIN ═══ -->
+<div id="login-screen" class="screen">
+  <div class="login-box">
+    <div class="login-logo">
+      <div class="login-logo-icon">🏥</div>
+      <h2>بوابة الإدارة</h2>
+      <p>تجمع جازان الصحي</p>
+    </div>
+    <div id="login-alert"></div>
+    <div class="form-group">
+      <label>اسم المستخدم</label>
+      <input type="text" id="admin-username" placeholder="أدخل اسم المستخدم" autocomplete="username">
+    </div>
+    <div class="form-group">
+      <label>كلمة المرور</label>
+      <input type="password" id="admin-password" placeholder="••••••••" autocomplete="current-password">
+    </div>
+    <button class="btn btn-primary" onclick="adminLogin()" id="login-btn">
+      <span>تسجيل الدخول</span>
+    </button>
+    <div style="text-align:center;margin-top:1.5rem;">
+      <button class="btn btn-sm btn-outline" onclick="showPatientApp()" style="width:auto">
+        🔙 العودة لتطبيق المراجعين
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════ PATIENT APP ═══ -->
+<div id="patient-screen" class="screen">
+  <!-- Topbar -->
+  <div class="topbar">
+    <div class="topbar-logo">
+      <div class="topbar-icon">🏥</div>
+      <div>
+        <div class="topbar-title">بطاقة المراجع الرقمية</div>
+        <div class="topbar-sub">تجمع جازان الصحي</div>
+      </div>
+    </div>
+    <div class="topbar-actions">
+      <button class="topbar-btn" onclick="showLoginScreen()">🔐 الإدارة</button>
+    </div>
+  </div>
+
+  <!-- Tab Bar -->
+  <div class="tab-bar">
+    <button class="tab-item active" onclick="switchTab('search', this)">
+      <span class="tab-icon">🔍</span>
+      <span>البحث</span>
+    </button>
+    <button class="tab-item" onclick="switchTab('details', this)" id="tab-details" style="display:none">
+      <span class="tab-icon">🪪</span>
+      <span>بطاقتي</span>
+    </button>
+    <button class="tab-item" onclick="switchTab('notifications', this)" id="tab-notifs">
+      <span class="tab-icon">🔔</span>
+      <span>الإشعارات</span>
+      <span class="badge" id="notif-badge" style="display:none">0</span>
+    </button>
+  </div>
+
+  <!-- ── TAB: SEARCH ── -->
+  <div id="tab-search" class="content">
+    <div class="hero-card">
+      <div class="hero-badge">🏥 تجمع جازان الصحي</div>
+      <h2>مرحباً بك</h2>
+      <p>أدخل بياناتك للوصول إلى بطاقتك الصحية الرقمية</p>
+      <div class="search-form">
+        <div id="search-alert"></div>
+        <div class="search-row">
+          <div>
+            <label style="color:rgba(255,255,255,0.8);font-size:0.8rem;display:block;margin-bottom:5px">رقم الهوية الوطنية</label>
+            <input type="number" id="search-id" placeholder="10XXXXXXXXX" maxlength="10">
+          </div>
+          <div>
+            <label style="color:rgba(255,255,255,0.8);font-size:0.8rem;display:block;margin-bottom:5px">تاريخ الميلاد</label>
+            <input type="date" id="search-dob">
+          </div>
+        </div>
+        <button class="btn btn-white" onclick="searchPatient()" id="search-btn">
+          <span id="search-btn-text">🔍 بحث عن بيانات المراجع</span>
+          <span id="search-spinner" style="display:none"><span class="loading-spinner loading-spinner-dark"></span></span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Features info cards -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="card" style="text-align:center;padding:1.25rem">
+        <div style="font-size:2rem;margin-bottom:8px">🪪</div>
+        <div style="font-size:0.88rem;font-weight:600;color:var(--primary)">بطاقة رقمية</div>
+        <div style="font-size:0.75rem;color:var(--text-secondary);margin-top:4px">احفظ بطاقتك في محفظتك الإلكترونية</div>
+      </div>
+      <div class="card" style="text-align:center;padding:1.25rem">
+        <div style="font-size:2rem;margin-bottom:8px">🔔</div>
+        <div style="font-size:0.88rem;font-weight:600;color:var(--primary)">إشعارات فورية</div>
+        <div style="font-size:0.75rem;color:var(--text-secondary);margin-top:4px">تلقّ أحدث المستجدات الصحية</div>
+      </div>
+      <div class="card" style="text-align:center;padding:1.25rem">
+        <div style="font-size:2rem;margin-bottom:8px">📲</div>
+        <div style="font-size:0.88font-weight:600;color:var(--primary)">QR آمن</div>
+        <div style="font-size:0.75rem;color:var(--text-secondary);margin-top:4px">رمز QR مؤمّن لبياناتك</div>
+      </div>
+      <div class="card" style="text-align:center;padding:1.25rem">
+        <div style="font-size:2rem;margin-bottom:8px">🛡️</div>
+        <div style="font-size:0.88rem;font-weight:600;color:var(--primary)">خصوصية كاملة</div>
+        <div style="font-size:0.75rem;color:var(--text-secondary);margin-top:4px">بياناتك محمية ومشفّرة</div>
+      </div>
+    </div>
+
+    <!-- Demo hint -->
+    <div class="alert alert-info" style="margin-top:1rem">
+      💡 <strong>للتجربة:</strong> رقم الهوية: <code>1234567890</code> — تاريخ الميلاد: <code>1990-05-15</code>
+    </div>
+  </div>
+
+  <!-- ── TAB: DETAILS ── -->
+  <div id="tab-details-content" class="content" style="display:none">
+    <!-- Digital Card -->
+    <div id="digital-card-container"></div>
+
+    <!-- QR + Barcode -->
+    <div class="card-codes" id="codes-section" style="display:none">
+      <div class="code-section">
+        <label>📷 رمز QR</label>
+        <canvas id="qr-canvas" width="110" height="110"></canvas>
+      </div>
+      <div class="code-section">
+        <label>📊 الباركود</label>
+        <svg id="barcode-svg" style="max-width:100%;height:70px"></svg>
+      </div>
+    </div>
+
+    <!-- Wallet Buttons -->
+    <div class="wallet-section" id="wallet-section" style="display:none">
+      <button class="wallet-btn wallet-apple" onclick="addToWallet('apple')">
+        <span style="font-size:1.2rem"></span> Apple Wallet
+      </button>
+      <button class="wallet-btn wallet-google" onclick="addToWallet('google')">
+        <span style="font-size:1.2rem">G</span> Google Wallet
+      </button>
+    </div>
+
+    <!-- Patient Info Card -->
+    <div class="card" id="patient-info-card" style="display:none">
+      <div class="card-header">
+        <div class="card-icon" style="background:var(--primary-50)">👤</div>
+        <div>
+          <div class="card-title">بيانات المراجع</div>
+          <div class="card-sub" id="patient-info-id-no"></div>
+        </div>
+      </div>
+      <div id="patient-info-rows"></div>
+      <div class="divider"></div>
+      <button class="btn btn-outline btn-sm" onclick="resetSearch()">
+        🔙 بحث جديد
+      </button>
+    </div>
+  </div>
+
+  <!-- ── TAB: NOTIFICATIONS ── -->
+  <div id="tab-notifications-content" class="content" style="display:none">
+    <div class="section-heading">
+      <h2>🔔 الإشعارات</h2>
+      <button class="btn btn-sm btn-outline" onclick="markAllRead()">قراءة الكل</button>
+    </div>
+    <div id="notifications-list">
+      <div class="empty-state">
+        <div class="empty-icon">🔔</div>
+        <h3>لا توجد إشعارات</h3>
+        <p>ستظهر هنا الإشعارات الواردة من تجمع جازان الصحي</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════ ADMIN ═══ -->
+<div id="admin-screen" class="screen">
+  <!-- Admin Topbar -->
+  <div class="topbar" style="background:#1e293b">
+    <div class="topbar-logo">
+      <div class="topbar-icon">🏥</div>
+      <div>
+        <div class="topbar-title">بوابة الإدارة</div>
+        <div class="topbar-sub">تجمع جازان الصحي</div>
+      </div>
+    </div>
+    <div class="topbar-actions">
+      <span style="color:rgba(255,255,255,0.7);font-size:0.82rem" id="admin-name-display">المدير</span>
+      <button class="topbar-btn" onclick="adminLogout()">🚪 خروج</button>
+    </div>
+  </div>
+
+  <!-- Admin Body -->
+  <div class="admin-body">
+    <!-- Sidebar -->
+    <div class="admin-sidebar">
+      <div class="sidebar-section">القائمة الرئيسية</div>
+      <button class="sidebar-item active" onclick="adminNav('dashboard', this)">
+        <span class="sidebar-icon">📊</span> لوحة التحكم
+      </button>
+      <button class="sidebar-item" onclick="adminNav('patients', this)">
+        <span class="sidebar-icon">👥</span> المرضى
+      </button>
+      <div class="sidebar-section">الخدمات</div>
+      <button class="sidebar-item" onclick="adminNav('notifications', this)">
+        <span class="sidebar-icon">🔔</span> الإشعارات
+      </button>
+      <button class="sidebar-item" onclick="adminNav('upload', this)">
+        <span class="sidebar-icon">📤</span> رفع بيانات
+      </button>
+      <button class="sidebar-item" onclick="adminNav('history', this)">
+        <span class="sidebar-icon">📋</span> سجل الرفع
+      </button>
+    </div>
+
+    <!-- Main Content -->
+    <div class="admin-main">
+
+      <!-- Dashboard -->
+      <div id="page-dashboard" class="admin-page active">
+        <div class="section-heading">
+          <h2>📊 لوحة التحكم</h2>
+          <span class="chip chip-success">● نشط</span>
+        </div>
+        <div class="stats-grid">
+          <div class="stat-card stat-primary">
+            <div class="stat-label">👥 إجمالي المرضى</div>
+            <div class="stat-value" id="stat-total">0</div>
+            <div class="stat-change">↑ محدّث</div>
+          </div>
+          <div class="stat-card stat-accent">
+            <div class="stat-label">🔔 الإشعارات</div>
+            <div class="stat-value" id="stat-notifs">0</div>
+            <div class="stat-change">↑ إجمالي</div>
+          </div>
+          <div class="stat-card stat-gold">
+            <div class="stat-label">📤 آخر رفع</div>
+            <div class="stat-value" id="stat-uploads">0</div>
+            <div class="stat-change">ملف</div>
+          </div>
+          <div class="stat-card stat-danger">
+            <div class="stat-label">📋 سجلات الرفع</div>
+            <div class="stat-value" id="stat-records">0</div>
+            <div class="stat-change">سجل مرفوع</div>
+          </div>
+        </div>
+
+        <!-- Recent patients table -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-icon" style="background:var(--primary-50)">👥</div>
+            <div><div class="card-title">آخر المرضى المضافين</div></div>
+          </div>
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>رقم الهوية</th>
+                  <th>الاسم الكامل</th>
+                  <th>رقم الجوال</th>
+                  <th>تاريخ الميلاد</th>
+                </tr>
+              </thead>
+              <tbody id="recent-patients-table">
+                <tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:2rem">لا توجد بيانات</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Patients -->
+      <div id="page-patients" class="admin-page">
+        <div class="section-heading">
+          <h2>👥 إدارة المرضى</h2>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-sm btn-secondary" onclick="exportPatients()">📥 تصدير</button>
+            <button class="btn btn-sm btn-primary" onclick="openAddPatientModal()">+ إضافة</button>
+          </div>
+        </div>
+        <div class="search-bar">
+          <input type="text" placeholder="البحث برقم الهوية أو الاسم..." id="patient-search-input" oninput="filterPatients(this.value)">
+          <span class="search-bar-icon">🔍</span>
+        </div>
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>رقم الهوية</th>
+                <th>الاسم الكامل</th>
+                <th>رقم الجوال</th>
+                <th>تاريخ الميلاد</th>
+                <th>إجراءات</th>
+              </tr>
+            </thead>
+            <tbody id="patients-table-body">
+              <tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:2rem">لا توجد بيانات</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="pagination" id="patients-pagination"></div>
+      </div>
+
+      <!-- Notifications Admin -->
+      <div id="page-notifications" class="admin-page">
+        <div class="section-heading">
+          <h2>🔔 إرسال الإشعارات</h2>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <div class="card-icon" style="background:#FFF8E1">📢</div>
+            <div><div class="card-title">إشعار جديد</div></div>
+          </div>
+          <div class="form-group">
+            <label>المستلمون</label>
+            <div class="recipient-selector">
+              <button class="recipient-chip active" onclick="selectRecipient('all', this)">الكل</button>
+              <button class="recipient-chip" onclick="selectRecipient('one', this)">مراجع محدد</button>
+            </div>
+          </div>
+          <div class="form-group" id="recipient-id-group" style="display:none">
+            <label>رقم الهوية</label>
+            <input type="text" id="notif-id-no" placeholder="أدخل رقم الهوية">
+          </div>
+          <div class="form-group">
+            <label>عنوان الإشعار</label>
+            <input type="text" id="notif-title" placeholder="مثال: تذكير بموعد">
+          </div>
+          <div class="form-group">
+            <label>نص الإشعار</label>
+            <textarea id="notif-message" rows="4" style="resize:vertical" placeholder="أدخل نص الإشعار..."></textarea>
+          </div>
+          <div id="notif-send-alert"></div>
+          <button class="btn btn-primary" onclick="sendNotification()">
+            🚀 إرسال الإشعار
+          </button>
+        </div>
+
+        <!-- Sent notifications -->
+        <div class="card" style="margin-top:1.5rem">
+          <div class="card-header">
+            <div class="card-icon" style="background:var(--primary-50)">📋</div>
+            <div><div class="card-title">الإشعارات المرسلة</div></div>
+          </div>
+          <div id="sent-notifications-list">
+            <div class="empty-state" style="padding:2rem">
+              <div class="empty-icon">📭</div>
+              <p>لا توجد إشعارات مرسلة</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Upload -->
+      <div id="page-upload" class="admin-page">
+        <div class="section-heading">
+          <h2>📤 رفع بيانات المرضى</h2>
+          <button class="btn btn-sm btn-secondary" onclick="downloadTemplate()">⬇ نموذج Excel</button>
+        </div>
+
+        <div class="card">
+          <div class="upload-zone" id="upload-zone" onclick="document.getElementById('file-input').click()"
+            ondragover="handleDragOver(event)" ondrop="handleDrop(event)" ondragleave="this.classList.remove('drag-over')">
+            <div class="upload-icon">📁</div>
+            <div class="upload-text">
+              <strong>اضغط لاختيار ملف</strong> أو اسحب وأفلت هنا
+            </div>
+            <div style="font-size:0.8rem;color:var(--text-muted);margin-top:8px">يدعم: .xlsx, .xls, .csv</div>
+          </div>
+          <input type="file" id="file-input" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleFileSelect(event)">
+
+          <div id="upload-progress-section" style="display:none;margin-top:1.25rem">
+            <div style="display:flex;justify-content:space-between;font-size:0.85rem;margin-bottom:6px">
+              <span id="upload-filename" style="font-weight:600"></span>
+              <span id="upload-pct" style="color:var(--primary)">0%</span>
+            </div>
+            <div class="progress-bar"><div class="progress-fill" id="upload-progress-bar" style="width:0%"></div></div>
+            <div id="upload-status" style="font-size:0.82rem;color:var(--text-secondary);margin-top:6px"></div>
+          </div>
+        </div>
+
+        <!-- Upload Report -->
+        <div class="card" id="upload-report" style="display:none">
+          <div class="card-header">
+            <div class="card-icon" style="background:var(--success-50)">✅</div>
+            <div><div class="card-title">تقرير الرفع</div></div>
+          </div>
+          <div class="report-grid">
+            <div class="report-item">
+              <span class="report-num" id="rpt-total" style="color:var(--primary)">0</span>
+              <div class="report-lbl">إجمالي السجلات</div>
+            </div>
+            <div class="report-item report-new">
+              <span class="report-num" id="rpt-new">0</span>
+              <div class="report-lbl">سجلات جديدة</div>
+            </div>
+            <div class="report-item report-upd">
+              <span class="report-num" id="rpt-upd">0</span>
+              <div class="report-lbl">سجلات محدّثة</div>
+            </div>
+            <div class="report-item report-skip">
+              <span class="report-num" id="rpt-skip">0</span>
+              <div class="report-lbl">متجاهلة / أخطاء</div>
+            </div>
+          </div>
+          <div id="rpt-errors" style="margin-top:1rem"></div>
+        </div>
+      </div>
+
+      <!-- Upload History -->
+      <div id="page-history" class="admin-page">
+        <div class="section-heading">
+          <h2>📋 سجل الرفع</h2>
+        </div>
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>اسم الملف</th>
+                <th>التاريخ</th>
+                <th>المُرفِع</th>
+                <th>إجمالي</th>
+                <th>الحالة</th>
+              </tr>
+            </thead>
+            <tbody id="history-table-body">
+              <tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:2rem">لا يوجد سجل</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════ MODALS ═══ -->
+<!-- Add Patient Modal -->
+<div class="modal-overlay" id="add-patient-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">➕ إضافة مراجع جديد</div>
+      <button class="modal-close" onclick="closeModal('add-patient-modal')">✕</button>
+    </div>
+    <div class="form-group">
+      <label>رقم الهوية الوطنية *</label>
+      <input type="text" id="new-id-no" placeholder="10XXXXXXXXX" maxlength="10">
+    </div>
+    <div class="form-group">
+      <label>الاسم الكامل *</label>
+      <input type="text" id="new-full-name" placeholder="أدخل الاسم الكامل">
+    </div>
+    <div class="form-group">
+      <label>رقم الجوال</label>
+      <input type="text" id="new-mobile" placeholder="05XXXXXXXX">
+    </div>
+    <div class="form-group">
+      <label>تاريخ الميلاد *</label>
+      <input type="date" id="new-dob">
+    </div>
+    <div id="add-patient-alert"></div>
+    <div style="display:flex;gap:10px;margin-top:1rem">
+      <button class="btn btn-primary" onclick="saveNewPatient()" style="flex:1">💾 حفظ</button>
+      <button class="btn btn-outline" onclick="closeModal('add-patient-modal')" style="flex:1">إلغاء</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast" style="
+  position:fixed;bottom:2rem;left:50%;transform:translateX(-50%) translateY(100px);
+  background:#1e293b;color:#fff;padding:0.75rem 1.25rem;border-radius:30px;
+  font-size:0.88rem;font-weight:500;z-index:9999;transition:transform 0.35s;
+  max-width:90%;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,0.25);
+  font-family:var(--font)
+">
+</div>
+
+<script>
+// ══════════════════════════════════════════ CONFIG ══
+
+const SUPABASE_URL = 'https://cxrkvycidavivzdijmmw.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN4cmt2eWNpZGF2aXZ6ZGlqbW13Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODExOTc3NTIsImV4cCI6MjA5Njc3Mzc1Mn0.xHQ-7C_Ht2zB0_TMxgHylB_y3iWHF63aeREzKQZEkEc';
+
+// Demo mode - remove when connected to real Supabase
+const DEMO_MODE = false;
+
+// Demo data
+const DEMO_PATIENTS = [
+  { id: 1, id_no: '1234567890', full_name: 'أحمد محمد العسيري', mobile_no: '0501234567', dob_g: '1990-05-15', created_at: new Date().toISOString() },
+  { id: 2, id_no: '2345678901', full_name: 'فاطمة علي الزهراني', mobile_no: '0557654321', dob_g: '1985-08-20', created_at: new Date().toISOString() },
+  { id: 3, id_no: '3456789012', full_name: 'محمد سعد القحطاني', mobile_no: '0591112233', dob_g: '1995-03-10', created_at: new Date().toISOString() },
+  { id: 4, id_no: '4567890123', full_name: 'نورة خالد الغامدي', mobile_no: '0544556677', dob_g: '1992-11-25', created_at: new Date().toISOString() },
+  { id: 5, id_no: '5678901234', full_name: 'عبدالله أحمد المالكي', mobile_no: '0533221100', dob_g: '1988-07-05', created_at: new Date().toISOString() },
+];
+
+const DEMO_NOTIFICATIONS = [
+  { id: 1, id_no: '1234567890', title: 'تذكير بموعد طبي', message: 'لديك موعد في عيادة الباطنية يوم الأحد الساعة 10:00 صباحاً. يرجى الحضور مبكراً.', is_read: false, created_at: new Date(Date.now() - 3600000).toISOString() },
+  { id: 2, id_no: '1234567890', title: 'نتائج التحاليل جاهزة', message: 'تحاليلك المخبرية التي أجريت بتاريخ الأسبوع الماضي أصبحت جاهزة للاستلام.', is_read: false, created_at: new Date(Date.now() - 86400000).toISOString() },
+  { id: 3, id_no: 'ALL', title: 'تنبيه عام: ساعات الدوام', message: 'إشعار بتعديل مواعيد الدوام خلال إجازة عيد الأضحى المبارك من تاريخ 15/06 حتى 22/06.', is_read: true, created_at: new Date(Date.now() - 172800000).toISOString() },
+];
+
+const DEMO_HISTORY = [
+  { id: 1, file_name: 'patients_jun_2025.xlsx', uploaded_by: 'admin', total_rows: 150, inserted_rows: 120, updated_rows: 25, skipped_rows: 5, status: 'success', created_at: new Date(Date.now() - 86400000).toISOString() },
+];
+
+// App state
+let state = {
+  currentPatient: null,
+  currentAdminUser: null,
+  allPatients: [...DEMO_PATIENTS],
+  allNotifications: [...DEMO_NOTIFICATIONS],
+  uploadHistory: [...DEMO_HISTORY],
+  patientsPage: 1,
+  patientsPerPage: 10,
+  filteredPatients: [...DEMO_PATIENTS],
+  notifRecipient: 'all',
+};
+
+// Supabase client (init when connected)
+let supabase = null;
+if (!DEMO_MODE && typeof window.supabase !== 'undefined') {
+  supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+}
+
+// ══════════════════════════════════════════ INIT ══
+
+window.addEventListener('DOMContentLoaded', () => {
+  setTimeout(() => {
+    showScreen('patient-screen');
+    loadNotificationBadge();
+  }, 2200);
+});
+
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+// ══════════════════════════════════════════ TABS ══
+
+function switchTab(tab, el) {
+  // Update tab bar
+  document.querySelectorAll('.tab-item').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  // Show/hide content
+  ['tab-search', 'tab-details-content', 'tab-notifications-content'].forEach(id => {
+    document.getElementById(id).style.display = 'none';
+  });
+  if (tab === 'search') document.getElementById('tab-search').style.display = 'block';
+  if (tab === 'details') document.getElementById('tab-details-content').style.display = 'block';
+  if (tab === 'notifications') {
+    document.getElementById('tab-notifications-content').style.display = 'block';
+    loadPatientNotifications();
+  }
+}
+
+// ══════════════════════════════════════════ SEARCH ══
+
+async function searchPatient() {
+  const idNo = document.getElementById('search-id').value.trim();
+  const dob = document.getElementById('search-dob').value;
+  const alertEl = document.getElementById('search-alert');
+  alertEl.innerHTML = '';
+
+  if (!idNo || !dob) {
+    alertEl.innerHTML = `<div class="alert alert-error">⚠️ يرجى إدخال رقم الهوية وتاريخ الميلاد</div>`;
+    return;
+  }
+  if (idNo.length !== 10) {
+    alertEl.innerHTML = `<div class="alert alert-error">⚠️ رقم الهوية يجب أن يكون 10 أرقام</div>`;
+    return;
+  }
+
+  const btn = document.getElementById('search-btn');
+  document.getElementById('search-btn-text').style.display = 'none';
+  document.getElementById('search-spinner').style.display = 'inline-flex';
+  btn.disabled = true;
+
+  await new Promise(r => setTimeout(r, 1200));
+
+  let patient = null;
+
+  if (DEMO_MODE) {
+    patient = state.allPatients.find(p => p.id_no === idNo && p.dob_g === dob);
+  } else {
+    const { data } = await supabase.from('patients').select('*').eq('id_no', idNo).eq('dob_g', dob).single();
+    patient = data;
+  }
+
+  document.getElementById('search-btn-text').style.display = 'inline';
+  document.getElementById('search-spinner').style.display = 'none';
+  btn.disabled = false;
+
+  if (patient) {
+    state.currentPatient = patient;
+    renderPatientDetails(patient);
+    // Show details tab
+    document.getElementById('tab-details').style.display = 'flex';
+    const detailsTab = document.getElementById('tab-details');
+    const tabItems = document.querySelectorAll('.tab-item');
+    switchTab('details', detailsTab);
+    showToast('✅ تم العثور على بياناتك');
+  } else {
+    alertEl.innerHTML = `<div class="alert alert-error">❌ لم يتم العثور على المراجع. تأكد من صحة رقم الهوية وتاريخ الميلاد.</div>`;
+  }
+}
+
+function renderPatientDetails(p) {
+  // Digital Card
+  document.getElementById('digital-card-container').innerHTML = `
+    <div class="digital-card success-anim">
+      <div class="card-brand">
+        <div>
+          <div class="card-brand-name">تجمع جازان الصحي</div>
+          <div style="font-size:0.65rem;opacity:0.5;margin-top:2px">Jazan Health Cluster</div>
+        </div>
+        <div class="card-brand-logo">🏥 JHC</div>
+      </div>
+      <div class="card-chip"></div>
+      <div class="card-name">${p.full_name}</div>
+      <div class="card-number">${p.id_no.replace(/(\d{3})(\d{4})(\d{3})/, '$1 $2 $3')}</div>
+      <div class="card-info-row">
+        <div class="card-info-item">
+          <label>تاريخ الميلاد</label>
+          <span>${p.dob_g}</span>
+        </div>
+        <div class="card-info-item">
+          <label>الجوال</label>
+          <span>${p.mobile_no || '---'}</span>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // QR Code
+  document.getElementById('codes-section').style.display = 'grid';
+  const canvas = document.getElementById('qr-canvas');
+  QRCode.toCanvas(canvas, JSON.stringify({ id: p.id_no, name: p.full_name, dob: p.dob_g }), {
+    width: 110, margin: 1, color: { dark: '#0D4B8F', light: '#ffffff' }
+  });
+
+  // Barcode
+  try {
+    JsBarcode('#barcode-svg', p.id_no, {
+      format: 'CODE39', width: 1.6, height: 60,
+      displayValue: false, background: 'transparent', lineColor: '#0D4B8F'
+    });
+  } catch(e) {}
+
+  // Wallet buttons
+  document.getElementById('wallet-section').style.display = 'grid';
+
+  // Patient info rows
+  document.getElementById('patient-info-card').style.display = 'block';
+  document.getElementById('patient-info-id-no').textContent = `رقم الهوية: ${p.id_no}`;
+  document.getElementById('patient-info-rows').innerHTML = `
+    <div class="info-row">
+      <div class="info-label"><div class="info-icon">👤</div> الاسم الكامل</div>
+      <div class="info-value">${p.full_name}</div>
+    </div>
+    <div class="info-row">
+      <div class="info-label"><div class="info-icon">🪪</div> رقم الهوية</div>
+      <div class="info-value">${p.id_no}</div>
+    </div>
+    <div class="info-row">
+      <div class="info-label"><div class="info-icon">📱</div> رقم الجوال</div>
+      <div class="info-value">${p.mobile_no || 'غير مسجل'}</div>
+    </div>
+    <div class="info-row">
+      <div class="info-label"><div class="info-icon">📅</div> تاريخ الميلاد</div>
+      <div class="info-value">${p.dob_g}</div>
+    </div>
+  `;
+}
+
+function resetSearch() {
+  state.currentPatient = null;
+  document.getElementById('search-id').value = '';
+  document.getElementById('search-dob').value = '';
+  document.getElementById('search-alert').innerHTML = '';
+  document.getElementById('tab-details').style.display = 'none';
+  const searchTab = document.querySelector('.tab-item:first-child');
+  switchTab('search', searchTab);
+}
+
+// ══════════════════════════════════════════ NOTIFICATIONS ══
+
+function loadPatientNotifications() {
+  if (!state.currentPatient) {
+    document.getElementById('notifications-list').innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">🔐</div>
+        <h3>يجب تسجيل الدخول أولاً</h3>
+        <p>ابحث بهويتك للوصول إلى الإشعارات</p>
+      </div>`;
+    return;
+  }
+
+  const notifs = state.allNotifications.filter(n =>
+    n.id_no === state.currentPatient.id_no || n.id_no === 'ALL'
+  ).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+  if (!notifs.length) {
+    document.getElementById('notifications-list').innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">🔔</div>
+        <h3>لا توجد إشعارات</h3>
+        <p>لا توجد إشعارات حالياً</p>
+      </div>`;
+    return;
+  }
+
+  document.getElementById('notifications-list').innerHTML = notifs.map(n => `
+    <div class="notif-item ${n.is_read ? '' : 'unread'}" onclick="markRead(${n.id})">
+      <div class="notif-dot ${n.is_read ? 'read' : ''}"></div>
+      <div style="flex:1">
+        <div class="notif-title">${n.title}</div>
+        <div class="notif-msg">${n.message}</div>
+        <div class="notif-date">🕐 ${formatDate(n.created_at)}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function markRead(id) {
+  const n = state.allNotifications.find(n => n.id === id);
+  if (n) { n.is_read = true; loadPatientNotifications(); loadNotificationBadge(); }
+}
+
+function markAllRead() {
+  if (!state.currentPatient) return;
+  state.allNotifications
+    .filter(n => n.id_no === state.currentPatient.id_no || n.id_no === 'ALL')
+    .forEach(n => n.is_read = true);
+  loadPatientNotifications();
+  loadNotificationBadge();
+  showToast('✅ تم تعيين كل الإشعارات كمقروءة');
+}
+
+function loadNotificationBadge() {
+  if (!state.currentPatient) return;
+  const count = state.allNotifications.filter(n =>
+    (n.id_no === state.currentPatient?.id_no || n.id_no === 'ALL') && !n.is_read
+  ).length;
+  const badge = document.getElementById('notif-badge');
+  if (count > 0) { badge.style.display = 'block'; badge.textContent = count; }
+  else badge.style.display = 'none';
+}
+
+// ══════════════════════════════════════════ WALLET ══
+
+function addToWallet(type) {
+  if (!state.currentPatient) return;
+  const p = state.currentPatient;
+  if (type === 'apple') {
+    showToast('🍎 يتم إنشاء بطاقة Apple Wallet...');
+    setTimeout(() => showToast('✅ تم إضافة البطاقة إلى Apple Wallet'), 2000);
+  } else {
+    showToast('📱 يتم إنشاء بطاقة Google Wallet...');
+    setTimeout(() => showToast('✅ تم إضافة البطاقة إلى Google Wallet'), 2000);
+  }
+}
+
+// ══════════════════════════════════════════ ADMIN LOGIN ══
+
+function showLoginScreen() { showScreen('login-screen'); }
+function showPatientApp() { showScreen('patient-screen'); }
+
+async function adminLogin() {
+  const username = document.getElementById('admin-username').value.trim();
+  const password = document.getElementById('admin-password').value;
+  const alertEl = document.getElementById('login-alert');
+  const btn = document.getElementById('login-btn');
+
+  if (!username || !password) {
+    alertEl.innerHTML = `<div class="alert alert-error">⚠️ يرجى إدخال اسم المستخدم وكلمة المرور</div>`;
+    return;
+  }
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="loading-spinner"></span>';
+
+  await new Promise(r => setTimeout(r, 1000));
+
+  // Demo: any credentials work
+  if (DEMO_MODE || (username === 'admin' && password === 'admin123')) {
+    state.currentAdminUser = { username, role: 'admin' };
+    document.getElementById('admin-name-display').textContent = username;
+    showScreen('admin-screen');
+    loadAdminDashboard();
+    showToast('✅ مرحباً، ' + username);
+  } else {
+    alertEl.innerHTML = `<div class="alert alert-error">❌ بيانات الدخول غير صحيحة</div>`;
+  }
+
+  btn.disabled = false;
+  btn.innerHTML = '<span>تسجيل الدخول</span>';
+}
+
+function adminLogout() {
+  state.currentAdminUser = null;
+  showScreen('patient-screen');
+  showToast('تم تسجيل الخروج');
+}
+
+// ══════════════════════════════════════════ ADMIN NAV ══
+
+function adminNav(page, el) {
+  document.querySelectorAll('.sidebar-item').forEach(i => i.classList.remove('active'));
+  el.classList.add('active');
+  document.querySelectorAll('.admin-page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-' + page).classList.add('active');
+  if (page === 'patients') loadPatientsTable();
+  if (page === 'history') loadHistoryTable();
+  if (page === 'notifications') loadSentNotifications();
+  if (page === 'dashboard') loadAdminDashboard();
+}
+
+// ══════════════════════════════════════════ DASHBOARD ══
+
+function loadAdminDashboard() {
+  document.getElementById('stat-total').textContent = state.allPatients.length;
+  document.getElementById('stat-notifs').textContent = state.allNotifications.length;
+  document.getElementById('stat-uploads').textContent = state.uploadHistory.length;
+  document.getElementById('stat-records').textContent =
+    state.uploadHistory.reduce((s, h) => s + h.total_rows, 0);
+
+  const recent = state.allPatients.slice(0, 5);
+  document.getElementById('recent-patients-table').innerHTML =
+    recent.map(p => `
+      <tr>
+        <td><span style="font-family:monospace">${p.id_no}</span></td>
+        <td><strong>${p.full_name}</strong></td>
+        <td>${p.mobile_no || '---'}</td>
+        <td>${p.dob_g}</td>
+      </tr>
+    `).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:2rem">لا توجد بيانات</td></tr>';
+}
+
+// ══════════════════════════════════════════ PATIENTS TABLE ══
+
+let patientsSearchQuery = '';
+
+function loadPatientsTable() {
+  const query = patientsSearchQuery.toLowerCase();
+  state.filteredPatients = query
+    ? state.allPatients.filter(p =>
+        p.id_no.includes(query) || p.full_name.toLowerCase().includes(query)
+      )
+    : [...state.allPatients];
+
+  const start = (state.patientsPage - 1) * state.patientsPerPage;
+  const page = state.filteredPatients.slice(start, start + state.patientsPerPage);
+
+  document.getElementById('patients-table-body').innerHTML =
+    page.map((p, i) => `
+      <tr>
+        <td style="color:var(--text-muted)">${start + i + 1}</td>
+        <td><span style="font-family:monospace;font-size:0.85rem">${p.id_no}</span></td>
+        <td><strong>${p.full_name}</strong></td>
+        <td>${p.mobile_no || '---'}</td>
+        <td>${p.dob_g}</td>
+        <td>
+          <button class="btn btn-sm btn-outline" onclick="deletePatient('${p.id_no}')" 
+            style="color:var(--danger);border-color:var(--danger)">🗑</button>
+        </td>
+      </tr>
+    `).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:2rem">لا توجد نتائج</td></tr>';
+
+  renderPagination();
+}
+
+function filterPatients(q) {
+  patientsSearchQuery = q;
+  state.patientsPage = 1;
+  loadPatientsTable();
+}
+
+function renderPagination() {
+  const total = Math.ceil(state.filteredPatients.length / state.patientsPerPage);
+  if (total <= 1) { document.getElementById('patients-pagination').innerHTML = ''; return; }
+
+  let html = '';
+  for (let i = 1; i <= total; i++) {
+    html += `<button class="page-btn ${i === state.patientsPage ? 'active' : ''}" onclick="gotoPage(${i})">${i}</button>`;
+  }
+  document.getElementById('patients-pagination').innerHTML = html;
+}
+
+function gotoPage(p) { state.patientsPage = p; loadPatientsTable(); }
+
+function deletePatient(idNo) {
+  if (!confirm('هل أنت متأكد من حذف هذا المراجع؟')) return;
+  state.allPatients = state.allPatients.filter(p => p.id_no !== idNo);
+  loadPatientsTable();
+  loadAdminDashboard();
+  showToast('🗑 تم حذف المراجع');
+}
+
+function openAddPatientModal() { openModal('add-patient-modal'); }
+
+async function saveNewPatient() {
+  const idNo = document.getElementById('new-id-no').value.trim();
+  const fullName = document.getElementById('new-full-name').value.trim();
+  const mobile = document.getElementById('new-mobile').value.trim();
+  const dob = document.getElementById('new-dob').value;
+  const alertEl = document.getElementById('add-patient-alert');
+
+  if (!idNo || !fullName || !dob) {
+    alertEl.innerHTML = `<div class="alert alert-error">⚠️ يرجى ملء الحقول المطلوبة</div>`;
+    return;
+  }
+  if (state.allPatients.find(p => p.id_no === idNo)) {
+    alertEl.innerHTML = `<div class="alert alert-error">⚠️ رقم الهوية مسجل مسبقاً</div>`;
+    return;
+  }
+
+  const newP = { id: Date.now(), id_no: idNo, full_name: fullName, mobile_no: mobile, dob_g: dob, created_at: new Date().toISOString() };
+  state.allPatients.unshift(newP);
+  closeModal('add-patient-modal');
+  loadPatientsTable();
+  loadAdminDashboard();
+  showToast('✅ تم إضافة المراجع بنجاح');
+
+  document.getElementById('new-id-no').value = '';
+  document.getElementById('new-full-name').value = '';
+  document.getElementById('new-mobile').value = '';
+  document.getElementById('new-dob').value = '';
+  alertEl.innerHTML = '';
+}
+
+function exportPatients() {
+  if (!window.XLSX) { showToast('⚠️ خطأ في التصدير'); return; }
+  const ws = XLSX.utils.json_to_sheet(state.allPatients.map(p => ({
+    'رقم الهوية': p.id_no, 'الاسم الكامل': p.full_name,
+    'رقم الجوال': p.mobile_no || '', 'تاريخ الميلاد': p.dob_g
+  })));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'المرضى');
+  XLSX.writeFile(wb, 'patients_export.xlsx');
+  showToast('✅ تم تصدير البيانات');
+}
+
+// ══════════════════════════════════════════ NOTIFICATIONS ADMIN ══
+
+function selectRecipient(type, el) {
+  document.querySelectorAll('.recipient-chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  state.notifRecipient = type;
+  document.getElementById('recipient-id-group').style.display = type === 'one' ? 'block' : 'none';
+}
+
+async function sendNotification() {
+  const title = document.getElementById('notif-title').value.trim();
+  const message = document.getElementById('notif-message').value.trim();
+  const alertEl = document.getElementById('notif-send-alert');
+
+  if (!title || !message) {
+    alertEl.innerHTML = `<div class="alert alert-error">⚠️ يرجى ملء العنوان والرسالة</div>`;
+    return;
+  }
+
+  let idNo = 'ALL';
+  if (state.notifRecipient === 'one') {
+    idNo = document.getElementById('notif-id-no').value.trim();
+    if (!idNo) { alertEl.innerHTML = `<div class="alert alert-error">⚠️ أدخل رقم الهوية</div>`; return; }
+    if (!state.allPatients.find(p => p.id_no === idNo)) {
+      alertEl.innerHTML = `<div class="alert alert-error">⚠️ المراجع غير موجود</div>`; return;
+    }
+  }
+
+  const notif = { id: Date.now(), id_no: idNo, title, message, is_read: false, created_at: new Date().toISOString() };
+  state.allNotifications.unshift(notif);
+
+  alertEl.innerHTML = `<div class="alert alert-success">✅ تم إرسال الإشعار بنجاح</div>`;
+  document.getElementById('notif-title').value = '';
+  document.getElementById('notif-message').value = '';
+  document.getElementById('notif-id-no').value = '';
+  loadSentNotifications();
+  showToast('✅ تم إرسال الإشعار');
+  setTimeout(() => alertEl.innerHTML = '', 3000);
+}
+
+function loadSentNotifications() {
+  const list = state.allNotifications.slice(0, 10);
+  document.getElementById('sent-notifications-list').innerHTML =
+    list.map(n => `
+      <div class="notif-item">
+        <div style="flex:1">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+            <div class="notif-title">${n.title}</div>
+            <span class="chip chip-primary" style="font-size:0.7rem">${n.id_no === 'ALL' ? 'الكل' : n.id_no}</span>
+          </div>
+          <div class="notif-msg">${n.message}</div>
+          <div class="notif-date">🕐 ${formatDate(n.created_at)}</div>
+        </div>
+      </div>
+    `).join('') || '<div class="empty-state" style="padding:2rem"><p>لا توجد إشعارات</p></div>';
+}
+
+// ══════════════════════════════════════════ UPLOAD ══
+
+function handleDragOver(e) { e.preventDefault(); document.getElementById('upload-zone').classList.add('drag-over'); }
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('upload-zone').classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file) processUpload(file);
+}
+function handleFileSelect(e) { const file = e.target.files[0]; if (file) processUpload(file); }
+
+async function processUpload(file) {
+  const validTypes = ['.xlsx', '.xls', '.csv'];
+  const ext = '.' + file.name.split('.').pop().toLowerCase();
+  if (!validTypes.includes(ext)) {
+    showToast('⚠️ نوع الملف غير مدعوم');
+    return;
+  }
+
+  const progressSection = document.getElementById('upload-progress-section');
+  progressSection.style.display = 'block';
+  document.getElementById('upload-filename').textContent = file.name;
+  document.getElementById('upload-report').style.display = 'none';
+
+  const steps = [
+    [10, 'قراءة الملف...'],
+    [25, 'التحقق من الأعمدة...'],
+    [45, 'التحقق من البيانات...'],
+    [65, 'إزالة المكررات...'],
+    [85, 'المقارنة مع قاعدة البيانات...'],
+    [100, 'اكتملت العملية ✅']
+  ];
+
+  for (const [pct, msg] of steps) {
+    document.getElementById('upload-progress-bar').style.width = pct + '%';
+    document.getElementById('upload-pct').textContent = pct + '%';
+    document.getElementById('upload-status').textContent = msg;
+    await new Promise(r => setTimeout(r, 400));
+  }
+
+  // Parse file
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const wb = XLSX.read(e.target.result, { type: 'binary' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws);
+
+      let inserted = 0, updated = 0, skipped = 0;
+      const errors = [];
+
+      rows.forEach((row, idx) => {
+        const idNo = String(row['ID_No'] || row['id_no'] || row['رقم الهوية'] || '').trim();
+        const fullName = String(row['Full_Name'] || row['full_name'] || row['الاسم الكامل'] || '').trim();
+        const mobile = String(row['Mobile_no'] || row['mobile_no'] || row['رقم الجوال'] || '').trim();
+        const dob = String(row['DOB_G'] || row['dob_g'] || row['تاريخ الميلاد'] || '').trim();
+
+        if (!idNo || !fullName) { skipped++; errors.push(`صف ${idx + 2}: بيانات ناقصة`); return; }
+        if (idNo.length !== 10) { skipped++; errors.push(`صف ${idx + 2}: رقم هوية غير صحيح (${idNo})`); return; }
+
+        const existing = state.allPatients.find(p => p.id_no === idNo);
+        if (existing) {
+          existing.full_name = fullName;
+          existing.mobile_no = mobile;
+          existing.dob_g = dob;
+          updated++;
+        } else {
+          state.allPatients.push({ id: Date.now() + idx, id_no: idNo, full_name: fullName, mobile_no: mobile, dob_g: dob, created_at: new Date().toISOString() });
+          inserted++;
+        }
+      });
+
+      // Update report
+      document.getElementById('rpt-total').textContent = rows.length;
+      document.getElementById('rpt-new').textContent = inserted;
+      document.getElementById('rpt-upd').textContent = updated;
+      document.getElementById('rpt-skip').textContent = skipped;
+      document.getElementById('rpt-errors').innerHTML = errors.length
+        ? `<div class="alert alert-warning"><strong>تحذيرات:</strong><br>${errors.slice(0, 5).join('<br>')}</div>`
+        : '';
+      document.getElementById('upload-report').style.display = 'block';
+
+      // Add to history
+      state.uploadHistory.unshift({
+        id: Date.now(), file_name: file.name,
+        uploaded_by: state.currentAdminUser?.username || 'admin',
+        total_rows: rows.length, inserted_rows: inserted, updated_rows: updated, skipped_rows: skipped,
+        status: 'success', created_at: new Date().toISOString()
+      });
+
+      loadAdminDashboard();
+      showToast(`✅ تم رفع ${rows.length} سجل`);
+    } catch(err) {
+      showToast('❌ خطأ في قراءة الملف');
+    }
+  };
+  reader.readAsBinaryString(file);
+}
+
+function downloadTemplate() {
+  if (!window.XLSX) return;
+  const ws = XLSX.utils.aoa_to_sheet([
+    ['ID_No', 'Full_Name', 'Mobile_no', 'DOB_G'],
+    ['1234567890', 'أحمد محمد العسيري', '0501234567', '1990-05-15'],
+  ]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'نموذج المرضى');
+  XLSX.writeFile(wb, 'patients_template.xlsx');
+  showToast('✅ تم تحميل النموذج');
+}
+
+// ══════════════════════════════════════════ HISTORY ══
+
+function loadHistoryTable() {
+  document.getElementById('history-table-body').innerHTML =
+    state.uploadHistory.map(h => `
+      <tr>
+        <td><strong>${h.file_name}</strong></td>
+        <td>${formatDate(h.created_at)}</td>
+        <td>${h.uploaded_by}</td>
+        <td>${h.total_rows} (↑${h.inserted_rows} ↻${h.updated_rows})</td>
+        <td><span class="chip ${h.status === 'success' ? 'chip-success' : 'chip-danger'}">
+          ${h.status === 'success' ? '✅ ناجح' : '❌ فشل'}
+        </span></td>
+      </tr>
+    `).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:2rem">لا يوجد سجل</td></tr>';
+}
+
+// ══════════════════════════════════════════ UTILS ══
+
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.transform = 'translateX(-50%) translateY(0)';
+  setTimeout(() => { t.style.transform = 'translateX(-50%) translateY(100px)'; }, 3000);
+}
+
+function formatDate(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const diff = Date.now() - d.getTime();
+  if (diff < 60000) return 'الآن';
+  if (diff < 3600000) return `منذ ${Math.floor(diff/60000)} دقيقة`;
+  if (diff < 86400000) return `منذ ${Math.floor(diff/3600000)} ساعة`;
+  return d.toLocaleDateString('ar-SA', { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+// Close modal on overlay click
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+  overlay.addEventListener('click', e => {
+    if (e.target === overlay) overlay.classList.remove('open');
+  });
+});
+
+// Enter key search
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && document.getElementById('patient-screen').classList.contains('active')) {
+    searchPatient();
+  }
+});
+</script>
+</body>
+</html>
