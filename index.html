@@ -925,13 +925,7 @@ input:checked + .slider::before { transform: translateX(20px); }
     <!-- Digital Card -->
     <div id="digital-card-container"></div>
 
-    <!-- QR Code -->
-    <div id="codes-section" style="display:none;flex-direction:column;align-items:center;background:var(--surface);border-radius:var(--radius-md);border:1px solid var(--border);padding:1.25rem;margin-bottom:1rem">
-      <div style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:10px;font-weight:500">📷 رمز QR للتحقق</div>
-      <div id="qr-container" style="display:flex;justify-content:center"></div>
-    </div>
-
-    <!-- Wallet Buttons -->
+    <!-- Wallet Buttons — مباشرة تحت البطاقة -->
     <div class="wallet-section" id="wallet-section" style="display:none">
       <button class="wallet-btn wallet-apple" onclick="addToWallet('apple')">
         <span style="font-size:1.2rem"></span> Apple Wallet
@@ -941,18 +935,9 @@ input:checked + .slider::before { transform: translateX(20px); }
       </button>
     </div>
 
-    <!-- Patient Info Card -->
-    <div class="card" id="patient-info-card" style="display:none">
-      <div class="card-header">
-        <div class="card-icon" style="background:var(--primary-50)">👤</div>
-        <div>
-          <div class="card-title">بيانات المراجع</div>
-          <div class="card-sub" id="patient-info-id-no"></div>
-        </div>
-      </div>
-      <div id="patient-info-rows"></div>
-      <div class="divider"></div>
-      <button class="btn btn-outline btn-sm" onclick="resetSearch()">
+    <!-- زر بحث جديد -->
+    <div style="margin-top:0.75rem">
+      <button class="btn btn-outline btn-sm" onclick="resetSearch()" style="width:100%">
         🔙 بحث جديد
       </button>
     </div>
@@ -1481,24 +1466,6 @@ function renderPatientDetails(p) {
     </div>
   `;
 
-  // QR Code — outside card
-  document.getElementById('codes-section').style.display = 'flex';
-  document.getElementById('codes-section').style.justifyContent = 'center';
-  document.getElementById('codes-section').style.padding = '1rem';
-  document.getElementById('codes-section').style.background = 'var(--surface)';
-  document.getElementById('codes-section').style.borderRadius = 'var(--radius-md)';
-  document.getElementById('codes-section').style.marginBottom = '1rem';
-  const qrContainer = document.getElementById('qr-container');
-  qrContainer.innerHTML = '';
-  try {
-    new QRCode(qrContainer, {
-      text: JSON.stringify({ id: p.id_no, name: p.full_name, dob: p.dob_g }),
-      width: 130, height: 130,
-      colorDark: '#0D4B8F', colorLight: '#ffffff',
-      correctLevel: QRCode.CorrectLevel.M
-    });
-  } catch(e) { qrContainer.innerHTML = '<div style="font-size:0.75rem;color:#888">QR غير متاح</div>'; }
-
   // Barcode inside card
   try {
     JsBarcode('#barcode-svg', p.id_no, {
@@ -1509,28 +1476,6 @@ function renderPatientDetails(p) {
 
   // Wallet buttons
   document.getElementById('wallet-section').style.display = 'grid';
-
-  // Patient info rows
-  document.getElementById('patient-info-card').style.display = 'block';
-  document.getElementById('patient-info-id-no').textContent = `رقم الهوية: ${p.id_no}`;
-  document.getElementById('patient-info-rows').innerHTML = `
-    <div class="info-row">
-      <div class="info-label"><div class="info-icon">👤</div> الاسم الكامل</div>
-      <div class="info-value">${p.full_name}</div>
-    </div>
-    <div class="info-row">
-      <div class="info-label"><div class="info-icon">🪪</div> رقم الهوية</div>
-      <div class="info-value">${p.id_no}</div>
-    </div>
-    <div class="info-row">
-      <div class="info-label"><div class="info-icon">📱</div> رقم الجوال</div>
-      <div class="info-value">${p.mobile_no || 'غير مسجل'}</div>
-    </div>
-    <div class="info-row">
-      <div class="info-label"><div class="info-icon">📅</div> تاريخ الميلاد</div>
-      <div class="info-value">${p.dob_g}</div>
-    </div>
-  `;
 }
 
 function resetSearch() {
