@@ -11,10 +11,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
 
 <style>
 :root {
@@ -1319,15 +1319,18 @@ let sbClient = null;
 // ══════════════════════════════════════════ INIT ══
 
 document.addEventListener('DOMContentLoaded', () => {
-  // Init Supabase
-  try {
-    if (!DEMO_MODE && window.supabase && window.supabase.createClient) {
-      sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    }
-  } catch(e) {}
-
-  // Show splash then navigate
+  // Show splash immediately
   showScreen('splash');
+
+  // Wait for all deferred scripts + 2.6s before navigating
+  window.addEventListener('load', () => {
+    // Init Supabase after all scripts loaded
+    try {
+      if (!DEMO_MODE && window.supabase && window.supabase.createClient) {
+        sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      }
+    } catch(e) {}
+  });
 
   setTimeout(() => {
     try { showScreen('patient-screen'); } catch(e) {}
