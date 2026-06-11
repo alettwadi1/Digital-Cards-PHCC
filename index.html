@@ -1325,19 +1325,25 @@ let state = {
   notifRecipient: 'all',
 };
 
-// Supabase client (init when connected)
+// Supabase client
 let supabase = null;
-if (!DEMO_MODE && typeof window.supabase !== 'undefined') {
-  supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-}
 
 // ══════════════════════════════════════════ INIT ══
 
-window.addEventListener('DOMContentLoaded', () => {
+window.addEventListener('load', () => {
+  // Init Supabase after all scripts loaded
+  if (!DEMO_MODE) {
+    try {
+      if (window.supabase && window.supabase.createClient) {
+        supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      }
+    } catch(e) { console.error('Supabase init:', e); }
+  }
+  showScreen('splash');
   setTimeout(() => {
     showScreen('patient-screen');
     loadNotificationBadge();
-  }, 2200);
+  }, 2500);
 });
 
 function showScreen(id) {
