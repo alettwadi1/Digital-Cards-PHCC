@@ -258,6 +258,7 @@ input[type=text], input[type=number], input[type=date],
 input[type=password], input[type=email], select, textarea {
   width: 100%;
   padding: 0.75rem 1rem;
+  height: 50px;
   border: 1.5px solid var(--border);
   border-radius: var(--radius-sm);
   font-family: var(--font);
@@ -266,7 +267,9 @@ input[type=password], input[type=email], select, textarea {
   background: var(--surface);
   transition: border-color 0.2s, box-shadow 0.2s;
   direction: rtl;
+  box-sizing: border-box;
 }
+textarea { height: auto; }
 input:focus, select:focus, textarea:focus {
   outline: none;
   border-color: var(--primary);
@@ -358,6 +361,18 @@ input::placeholder { color: var(--text-muted); }
   box-sizing: border-box;
 }
 .search-form input::placeholder { color: rgba(255,255,255,0.5); }
+.search-form input[type=date] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 50px;
+  line-height: 1.2;
+  color: rgba(255,255,255,0.9);
+}
+.search-form input[type=date]::-webkit-date-and-time-value {
+  text-align: right;
+  padding: 0;
+  margin: 0;
+}
 .search-form input:focus { background: rgba(255,255,255,0.18); border-color: rgba(255,255,255,0.5); box-shadow: none; }
 .btn-white { background: #fff; color: var(--primary); font-weight: 700; }
 .btn-white:hover { background: rgba(255,255,255,0.9); transform: translateY(-1px); }
@@ -1419,6 +1434,44 @@ document.addEventListener('DOMContentLoaded', () => {
         if (unread > 0) setTimeout(playNotifSound, 500);
       }
     } catch(e) {}
+
+    // ── Real-time notification polling (every 10s) ──
+    setInterval(async () => {
+      if (!state.currentPatient) return;
+      if (!sbClient || DEMO_MODE) return;
+      try {
+        // Fetch notifications for this patient from Supabase
+        const { data, error } = await sbClient
+          .from('notifications')
+          .select('*')
+          .or(`id_no.eq.${state.currentPatient.id_no},id_no.eq.ALL`)
+          .order('created_at', { ascending: false })
+          .limit(50);
+        if (error || !data) return;
+
+        // Find truly new notifications (not yet in local state)
+        const existingIds = new Set(state.allNotifications.map(n => String(n.id)));
+        const newNotifs = data.filter(n => !existingIds.has(String(n.id)));
+
+        if (newNotifs.length > 0) {
+          // Prepend new notifications, preserving is_read state
+          state.allNotifications = [
+            ...newNotifs,
+            ...state.allNotifications
+          ];
+          // Refresh UI
+          loadNotificationBadge();
+          // If on notifications tab — refresh list
+          const notifTab = document.getElementById('tab-notifications-content');
+          if (notifTab && notifTab.style.display !== 'none') {
+            loadPatientNotifications();
+          }
+          // Play sound for unread new notifications
+          const hasUnread = newNotifs.some(n => !n.is_read);
+          if (hasUnread) playNotifSound();
+        }
+      } catch(e) {}
+    }, 10000);
   }, 2600);
 
   // Fallback: force transition after 3.5s regardless
@@ -1569,12 +1622,18 @@ function renderPatientDetails(p) {
 }
 
 function resetSearch() {
+  // Keep patient data for existing session but prepare fresh search fields
   state.currentPatient = null;
   try { sessionStorage.removeItem('currentPatient'); } catch(e) {}
+  // Clear search fields
   document.getElementById('search-id').value = '';
   document.getElementById('search-dob').value = '';
   document.getElementById('search-alert').innerHTML = '';
+  // Focus the ID field for fast re-entry
+  try { document.getElementById('search-id').focus(); } catch(e) {}
+  // Hide the card tab (no patient loaded)
   document.getElementById('tab-details').style.display = 'none';
+  // Switch to search tab
   const searchTab = document.querySelector('.tab-item:first-child');
   switchTab('search', searchTab);
 }
@@ -2021,6 +2080,20 @@ async function sendNotification() {
   loadSentNotifications();
   showToast('✅ تم إرسال الإشعار');
   setTimeout(() => alertEl.innerHTML = '', 3000);
+
+  // Immediately refresh patient notification view if a patient is logged in
+  // and the notification targets them
+  if (state.currentPatient) {
+    const targetsPatient = idNo === 'ALL' || idNo === state.currentPatient.id_no;
+    if (targetsPatient) {
+      loadNotificationBadge();
+      const notifContent = document.getElementById('tab-notifications-content');
+      if (notifContent && notifContent.style.display !== 'none') {
+        loadPatientNotifications();
+      }
+      playNotifSound();
+    }
+  }
 }
 
 function loadSentNotifications() {
