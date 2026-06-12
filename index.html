@@ -884,7 +884,7 @@ input:checked + .slider::before { transform: translateX(20px); }
   <div class="tab-bar">
     <button class="tab-item active" onclick="switchTab('search', this)">
       <span class="tab-icon">🔍</span>
-      <span>البحث</span>
+      <span>إضافة تابع</span>
     </button>
     <button class="tab-item" onclick="switchTab('details', this)" id="tab-details" style="display:none">
       <span class="tab-icon">🪪</span>
@@ -967,10 +967,10 @@ input:checked + .slider::before { transform: translateX(20px); }
       </button>
     </div>
 
-    <!-- زر بحث جديد -->
+    <!-- زر إضافة بطاقة تابع -->
     <div style="margin-top:0.75rem">
       <button class="btn btn-outline btn-sm" onclick="resetSearch()" style="width:100%">
-        🔙 بحث جديد
+        ➕ إضافة بطاقة تابع
       </button>
     </div>
   </div>
@@ -1139,7 +1139,8 @@ input:checked + .slider::before { transform: translateX(20px); }
           </div>
           <div class="form-group" id="recipient-id-group" style="display:none">
             <label>رقم الهوية</label>
-            <input type="text" id="notif-id-no" placeholder="أدخل رقم الهوية">
+            <input type="text" id="notif-id-no" placeholder="أدخل رقم الهوية" oninput="lookupPatientForNotif(this.value)">
+            <div id="notif-patient-name" style="margin-top:6px;font-size:0.85rem;color:var(--primary);font-weight:600;min-height:20px"></div>
           </div>
           <div class="form-group">
             <label>عنوان الإشعار</label>
@@ -1167,6 +1168,21 @@ input:checked + .slider::before { transform: translateX(20px); }
               <p>لا توجد إشعارات مرسلة</p>
             </div>
           </div>
+        </div>
+      </div>
+
+        <!-- WhatsApp Settings -->
+        <div class="card" style="margin-top:1.5rem">
+          <div class="card-header">
+            <div class="card-icon" style="background:#E8F5E9">📱</div>
+            <div><div class="card-title">إعدادات واتساب المركز الصحي</div></div>
+          </div>
+          <div class="form-group">
+            <label>رقم واتساب المركز (مثال: 966501234567)</label>
+            <input type="text" id="clinic-whatsapp" placeholder="966XXXXXXXXX" value="${state.whatsappNumber}">
+          </div>
+          <button class="btn btn-secondary" onclick="saveWhatsAppNumber()">💾 حفظ الرقم</button>
+          <div id="whatsapp-save-alert" style="margin-top:8px"></div>
         </div>
       </div>
 
@@ -1334,7 +1350,35 @@ let state = {
   patientsPerPage: 10,
   filteredPatients: [...DEMO_PATIENTS],
   notifRecipient: 'all',
+  whatsappNumber: localStorage.getItem('clinic_whatsapp') || '',
 };
+
+// Format mobile: remove leading 0 and add 966
+function formatMobile(mobile) {
+  if (!mobile) return '---';
+  let m = String(mobile).trim().replace(/\s/g, '');
+  if (m.startsWith('0')) m = m.substring(1);
+  if (!m.startsWith('966')) m = '966' + m;
+  return m;
+}
+
+// Notification sound (Web Audio API — no file needed)
+function playNotifSound() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(880, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.3);
+    gain.gain.setValueAtTime(0.4, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.5);
+  } catch(e) {}
+}
 
 // Supabase client
 let sbClient = null;
@@ -1368,6 +1412,15 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     } catch(e) {}
     try { loadNotificationBadge(); } catch(e) {}
+    // Play sound if there are unread notifications
+    try {
+      if (state.currentPatient) {
+        const unread = state.allNotifications.filter(n =>
+          (n.id_no === state.currentPatient.id_no || n.id_no === 'ALL') && !n.is_read
+        ).length;
+        if (unread > 0) setTimeout(playNotifSound, 500);
+      }
+    } catch(e) {}
   }, 2600);
 
   // Fallback: force transition after 3.5s regardless
@@ -1487,7 +1540,7 @@ function renderPatientDetails(p) {
         <!-- رقم الجوال — right aligned -->
         <div style="flex:1;text-align:right">
           <div style="font-size:0.62rem;color:rgba(255,255,255,0.55);margin-bottom:2px;text-align:center">رقم الجوال</div>
-          <div style="font-size:0.82rem;color:#fff;font-family:monospace;text-align:center">${p.mobile_no || '---'}</div>
+          <div style="font-size:0.82rem;color:#fff;font-family:monospace;text-align:center">${formatMobile(p.mobile_no)}</div>
         </div>
       </div>
 
@@ -1495,8 +1548,8 @@ function renderPatientDetails(p) {
       <div style="height:1px;background:rgba(255,255,255,0.15);margin-bottom:0.85rem"></div>
 
       <!-- Barcode inside card -->
-      <div style="background:rgba(255,255,255,0.95);border-radius:8px;padding:8px 10px 4px;margin-bottom:0.6rem">
-        <svg id="barcode-svg" style="width:100%;height:52px;display:block"></svg>
+      <div style="background:rgba(255,255,255,0.95);border-radius:8px;padding:8px 10px 4px;margin-bottom:0.6rem;display:flex;justify-content:center;align-items:center;overflow:hidden">
+        <svg id="barcode-svg" style="max-width:100%;height:52px;display:block"></svg>
       </div>
 
       <!-- ID number below barcode, inside card -->
@@ -1569,7 +1622,21 @@ function loadPatientNotifications() {
 
 function markRead(id) {
   const n = state.allNotifications.find(n => n.id === id);
-  if (n) { n.is_read = true; loadPatientNotifications(); loadNotificationBadge(); }
+  if (n && !n.is_read) {
+    n.is_read = true;
+    n.read_at = new Date().toISOString();
+    // Save read_at to Supabase if available
+    if (sbClient && !DEMO_MODE) {
+      sbClient.from('notifications').update({ is_read: true, read_at: n.read_at }).eq('id', id).then(() => {});
+    }
+    loadPatientNotifications();
+    loadNotificationBadge();
+    // Notify admin panel (update sent notifications list if open)
+    if (document.getElementById('sent-notifications-list')) loadSentNotifications();
+  } else if (n) {
+    // Already read — just refresh view
+    loadPatientNotifications();
+  }
 }
 
 function markAllRead() {
@@ -1657,7 +1724,15 @@ function adminNav(page, el) {
   document.getElementById('page-' + page).classList.add('active');
   if (page === 'patients') loadPatientsTable();
   if (page === 'history') loadHistoryTable();
-  if (page === 'notifications') loadSentNotifications();
+  if (page === 'notifications') {
+    loadSentNotifications();
+    // Set default message for "all" recipient
+    const msgEl = document.getElementById('notif-message');
+    if (msgEl && !msgEl.value) msgEl.value = 'عزيزي مراجع مركز صحي الشقيق،\n';
+    // Populate WhatsApp field
+    const waEl = document.getElementById('clinic-whatsapp');
+    if (waEl) waEl.value = state.whatsappNumber;
+  }
   if (page === 'dashboard') loadAdminDashboard();
 }
 
@@ -1686,17 +1761,7 @@ function loadAdminDashboard() {
 
 let patientsSearchQuery = '';
 
-async function loadPatientsTable() {
-  // Fetch from Supabase if available
-  if (!DEMO_MODE && sbClient) {
-    try {
-      const { data, error } = await sbClient.from('patients').select('*').order('created_at', { ascending: false });
-      if (!error && data) {
-        state.allPatients = data;
-      }
-    } catch(e) {}
-  }
-
+function loadPatientsTable() {
   const query = patientsSearchQuery.toLowerCase();
   state.filteredPatients = query
     ? state.allPatients.filter(p =>
@@ -1744,16 +1809,8 @@ function renderPagination() {
 
 function gotoPage(p) { state.patientsPage = p; loadPatientsTable(); }
 
-async function deletePatient(idNo) {
+function deletePatient(idNo) {
   if (!confirm('هل أنت متأكد من حذف هذا المراجع؟')) return;
-
-  if (!DEMO_MODE && sbClient) {
-    try {
-      const { error } = await sbClient.from('patients').delete().eq('id_no', idNo);
-      if (error) { showToast('❌ فشل الحذف: ' + error.message); return; }
-    } catch(e) { showToast('❌ خطأ أثناء الحذف'); return; }
-  }
-
   state.allPatients = state.allPatients.filter(p => p.id_no !== idNo);
   loadPatientsTable();
   loadAdminDashboard();
@@ -1778,26 +1835,8 @@ async function saveNewPatient() {
     return;
   }
 
-  const newP = { id_no: idNo, full_name: fullName, mobile_no: mobile, dob_g: dob };
-
-  // Insert into Supabase
-  if (!DEMO_MODE && sbClient) {
-    try {
-      const { data, error } = await sbClient.from('patients').insert([newP]).select().single();
-      if (error) {
-        alertEl.innerHTML = `<div class="alert alert-error">❌ فشل الحفظ: ${error.message}</div>`;
-        return;
-      }
-      state.allPatients.unshift(data);
-    } catch(e) {
-      alertEl.innerHTML = `<div class="alert alert-error">❌ خطأ في الاتصال</div>`;
-      return;
-    }
-  } else {
-    // Demo mode only
-    state.allPatients.unshift({ ...newP, id: Date.now(), created_at: new Date().toISOString() });
-  }
-
+  const newP = { id: Date.now(), id_no: idNo, full_name: fullName, mobile_no: mobile, dob_g: dob, created_at: new Date().toISOString() };
+  state.allPatients.unshift(newP);
   closeModal('add-patient-modal');
   loadPatientsTable();
   loadAdminDashboard();
@@ -1829,6 +1868,33 @@ function selectRecipient(type, el) {
   el.classList.add('active');
   state.notifRecipient = type;
   document.getElementById('recipient-id-group').style.display = type === 'one' ? 'block' : 'none';
+  if (type === 'all') {
+    document.getElementById('notif-patient-name').textContent = '';
+    document.getElementById('notif-message').value = 'عزيزي مراجع مركز صحي الشقيق،\n';
+  }
+}
+
+function lookupPatientForNotif(idNo) {
+  const nameEl = document.getElementById('notif-patient-name');
+  const msgEl = document.getElementById('notif-message');
+  idNo = idNo.trim();
+  if (!idNo) { nameEl.textContent = ''; return; }
+  const p = state.allPatients.find(p => p.id_no === idNo);
+  if (p) {
+    nameEl.textContent = '✅ ' + p.full_name;
+    msgEl.value = `عزيزي مراجع مركز صحي الشقيق - ${p.full_name}،\n`;
+  } else {
+    nameEl.textContent = '⚠️ رقم الهوية غير موجود';
+  }
+}
+
+function saveWhatsAppNumber() {
+  const num = document.getElementById('clinic-whatsapp').value.trim();
+  state.whatsappNumber = num;
+  localStorage.setItem('clinic_whatsapp', num);
+  const alert = document.getElementById('whatsapp-save-alert');
+  alert.innerHTML = '<div class="alert alert-success">✅ تم حفظ رقم الواتساب</div>';
+  setTimeout(() => alert.innerHTML = '', 3000);
 }
 
 async function sendNotification() {
@@ -1850,13 +1916,19 @@ async function sendNotification() {
     }
   }
 
-  const notif = { id: Date.now(), id_no: idNo, title, message, is_read: false, created_at: new Date().toISOString() };
+  const notif = { id: Date.now(), id_no: idNo, title, message, is_read: false, read_at: null, created_at: new Date().toISOString() };
   state.allNotifications.unshift(notif);
+
+  // Save to Supabase if connected
+  if (sbClient && !DEMO_MODE) {
+    try { await sbClient.from('notifications').insert([notif]); } catch(e) {}
+  }
 
   alertEl.innerHTML = `<div class="alert alert-success">✅ تم إرسال الإشعار بنجاح</div>`;
   document.getElementById('notif-title').value = '';
   document.getElementById('notif-message').value = '';
   document.getElementById('notif-id-no').value = '';
+  document.getElementById('notif-patient-name').textContent = '';
   loadSentNotifications();
   showToast('✅ تم إرسال الإشعار');
   setTimeout(() => alertEl.innerHTML = '', 3000);
@@ -1874,6 +1946,7 @@ function loadSentNotifications() {
           </div>
           <div class="notif-msg">${n.message}</div>
           <div class="notif-date">🕐 ${formatDate(n.created_at)}</div>
+          ${n.is_read ? `<div class="notif-date" style="color:var(--success);margin-top:3px">✅ قُرئ في: ${formatDate(n.read_at)}</div>` : '<div class="notif-date" style="color:var(--text-muted);margin-top:3px">⏳ لم يُقرأ بعد</div>'}
         </div>
       </div>
     `).join('') || '<div class="empty-state" style="padding:2rem"><p>لا توجد إشعارات</p></div>';
