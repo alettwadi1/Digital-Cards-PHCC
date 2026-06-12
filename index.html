@@ -988,8 +988,8 @@ input:checked + .slider::before { transform: translateX(20px); }
               <button type="button" id="cal-g-btn" class="cal-chip active" onclick="setCalType('g')">ميلادي</button>
               <button type="button" id="cal-h-btn" class="cal-chip" onclick="setCalType('h')">هجري</button>
             </div>
-            <input type="text" id="search-dob" inputmode="numeric" dir="ltr" placeholder="مثال: 1990/05/15" style="text-align:right">
-            <div id="dob-hint" style="color:rgba(255,255,255,0.6);font-size:0.72rem;margin-top:4px">أدخل التاريخ بصيغة: سنة/شهر/يوم</div>
+            <input type="text" id="search-dob" inputmode="numeric" dir="ltr" placeholder="مثال: 1990/05/15" style="text-align:right" oninput="autoFormatDateInput(this)">
+            <div id="dob-hint" style="color:rgba(255,255,255,0.6);font-size:0.72rem;margin-top:4px">اكتب الأرقام فقط (سنة ثم شهر ثم يوم) وستُضاف / تلقائياً</div>
           </div>
         </div>
         <button class="btn btn-white" onclick="searchPatient()" id="search-btn">
@@ -1413,11 +1413,11 @@ input:checked + .slider::before { transform: translateX(20px); }
     </div>
     <div class="form-group">
       <label>تاريخ الميلاد (ميلادي) *</label>
-      <input type="text" id="new-dob" dir="ltr" inputmode="numeric" placeholder="مثال: 1990/05/15" style="text-align:right">
+      <input type="text" id="new-dob" dir="ltr" inputmode="numeric" placeholder="مثال: 1990/05/15" style="text-align:right" oninput="autoFormatDateInput(this)">
     </div>
     <div class="form-group">
       <label>تاريخ الميلاد (هجري)</label>
-      <input type="text" id="new-dob-h" dir="ltr" inputmode="numeric" placeholder="مثال: 1411/11/20" style="text-align:right">
+      <input type="text" id="new-dob-h" dir="ltr" inputmode="numeric" placeholder="مثال: 1411/11/20" style="text-align:right" oninput="autoFormatDateInput(this)">
     </div>
     <div id="add-patient-alert"></div>
     <div style="display:flex;gap:10px;margin-top:1rem">
@@ -1715,10 +1715,10 @@ function setCalType(type) {
   const hint = document.getElementById('dob-hint');
   if (type === 'g') {
     inp.placeholder = 'مثال: 1990/05/15';
-    hint.textContent = 'التاريخ الميلادي بصيغة: سنة/شهر/يوم';
+    hint.textContent = 'التاريخ الميلادي — اكتب الأرقام فقط، وستُضاف / تلقائياً';
   } else {
     inp.placeholder = 'مثال: 1411/11/20';
-    hint.textContent = 'التاريخ الهجري بصيغة: سنة/شهر/يوم';
+    hint.textContent = 'التاريخ الهجري — اكتب الأرقام فقط، وستُضاف / تلقائياً';
   }
   inp.value = '';
 }
@@ -1741,6 +1741,19 @@ function normalizeDate(val) {
   m = String(parseInt(m, 10));
   d = String(parseInt(d, 10));
   return `${y}/${m}/${d}`;
+}
+
+// تنسيق تلقائي: المستخدم يكتب أرقاماً فقط، ونضيف / تلقائياً (سنة/شهر/يوم)
+function autoFormatDateInput(inp) {
+  let v = String(inp.value)
+    .replace(/[\u0660-\u0669]/g, d => d.charCodeAt(0) - 0x0660)
+    .replace(/[\u06F0-\u06F9]/g, d => d.charCodeAt(0) - 0x06F0)
+    .replace(/\D/g, '')
+    .slice(0, 8); // YYYYMMDD
+  let out = v;
+  if (v.length > 6) out = v.slice(0, 4) + '/' + v.slice(4, 6) + '/' + v.slice(6);
+  else if (v.length > 4) out = v.slice(0, 4) + '/' + v.slice(4);
+  inp.value = out;
 }
 
 async function searchPatient() {
