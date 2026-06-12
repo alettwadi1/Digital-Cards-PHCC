@@ -1738,20 +1738,65 @@ function adminNav(page, el) {
 
 // ══════════════════════════════════════════ DASHBOARD ══
 
-function loadAdminDashboard() {
-  document.getElementById('stat-total').textContent = state.allPatients.length;
+async function loadAdminDashboard() {
+  // Update notifications & uploads stats from local state
   document.getElementById('stat-notifs').textContent = state.allNotifications.length;
   document.getElementById('stat-uploads').textContent = state.uploadHistory.length;
   document.getElementById('stat-records').textContent =
     state.uploadHistory.reduce((s, h) => s + h.total_rows, 0);
 
-  const recent = state.allPatients.slice(0, 5);
+  // Show loading placeholders
+  document.getElementById('stat-total').innerHTML = '<span class="loading-spinner"></span>';
+  document.getElementById('recent-patients-table').innerHTML =
+    '<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:1.5rem"><span class="loading-spinner"></span> جاري التحميل...</td></tr>';
+
+  // If Supabase connected — fetch real count and latest 5 patients
+  if (sbClient && !DEMO_MODE) {
+    try {
+      // Get real total count
+      const { count } = await sbClient
+        .from('patients')
+        .select('*', { count: 'exact', head: true });
+
+      document.getElementById('stat-total').textContent = count ?? state.allPatients.length;
+
+      // Get latest 5 patients ordered by created_at DESC
+      const { data: latest, error } = await sbClient
+        .from('patients')
+        .select('id_no, full_name, mobile_no, dob_g, created_at')
+        .order('created_at', { ascending: false })
+        .limit(5);
+
+      if (!error && latest && latest.length > 0) {
+        document.getElementById('recent-patients-table').innerHTML =
+          latest.map(p => `
+            <tr>
+              <td><span style="font-family:monospace">${p.id_no}</span></td>
+              <td><strong>${p.full_name}</strong></td>
+              <td>${formatMobile(p.mobile_no)}</td>
+              <td>${p.dob_g}</td>
+            </tr>
+          `).join('');
+        return;
+      }
+    } catch(e) {
+      console.warn('Supabase dashboard error:', e);
+    }
+  }
+
+  // Fallback: use local state (sorted by created_at DESC)
+  document.getElementById('stat-total').textContent = state.allPatients.length;
+
+  const recent = [...state.allPatients]
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+    .slice(0, 5);
+
   document.getElementById('recent-patients-table').innerHTML =
     recent.map(p => `
       <tr>
         <td><span style="font-family:monospace">${p.id_no}</span></td>
         <td><strong>${p.full_name}</strong></td>
-        <td>${p.mobile_no || '---'}</td>
+        <td>${formatMobile(p.mobile_no)}</td>
         <td>${p.dob_g}</td>
       </tr>
     `).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:2rem">لا توجد بيانات</td></tr>';
@@ -1761,7 +1806,21 @@ function loadAdminDashboard() {
 
 let patientsSearchQuery = '';
 
-function loadPatientsTable() {
+async function loadPatientsTable() {
+  // If Supabase connected, fetch fresh data
+  if (sbClient && !DEMO_MODE) {
+    try {
+      const { data, error } = await sbClient
+        .from('patients')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (!error && data) {
+        state.allPatients = data;
+        state.filteredPatients = [...data];
+      }
+    } catch(e) {}
+  }
+
   const query = patientsSearchQuery.toLowerCase();
   state.filteredPatients = query
     ? state.allPatients.filter(p =>
@@ -1809,8 +1868,16 @@ function renderPagination() {
 
 function gotoPage(p) { state.patientsPage = p; loadPatientsTable(); }
 
-function deletePatient(idNo) {
+async function deletePatient(idNo) {
   if (!confirm('هل أنت متأكد من حذف هذا المراجع؟')) return;
+
+  // Delete from Supabase if connected
+  if (sbClient && !DEMO_MODE) {
+    try {
+      await sbClient.from('patients').delete().eq('id_no', idNo);
+    } catch(e) {}
+  }
+
   state.allPatients = state.allPatients.filter(p => p.id_no !== idNo);
   loadPatientsTable();
   loadAdminDashboard();
@@ -1835,8 +1902,32 @@ async function saveNewPatient() {
     return;
   }
 
-  const newP = { id: Date.now(), id_no: idNo, full_name: fullName, mobile_no: mobile, dob_g: dob, created_at: new Date().toISOString() };
-  state.allPatients.unshift(newP);
+  const newP = {
+    id_no: idNo,
+    full_name: fullName,
+    mobile_no: mobile,
+    dob_g: dob,
+    created_at: new Date().toISOString()
+  };
+
+  // Save to Supabase if connected
+  if (sbClient && !DEMO_MODE) {
+    try {
+      const { data, error } = await sbClient.from('patients').insert([newP]).select().single();
+      if (error) {
+        alertEl.innerHTML = `<div class="alert alert-error">❌ خطأ في الحفظ: ${error.message}</div>`;
+        return;
+      }
+      // Use returned row (with DB-generated id)
+      state.allPatients.unshift(data || newP);
+    } catch(e) {
+      alertEl.innerHTML = `<div class="alert alert-error">❌ خطأ في الاتصال بقاعدة البيانات</div>`;
+      return;
+    }
+  } else {
+    state.allPatients.unshift({ id: Date.now(), ...newP });
+  }
+
   closeModal('add-patient-modal');
   loadPatientsTable();
   loadAdminDashboard();
