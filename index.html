@@ -1469,15 +1469,32 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!state.currentPatient) return;
       if (!sbClient || DEMO_MODE) return;
       try {
-        const { data, error } = await sbClient
+        const patientId = state.currentPatient.id_no;
+        // جلب إشعارات المراجع المحدد + الإشعارات العامة
+        const { data: patientNotifs, error: e1 } = await sbClient
           .from('notifications')
           .select('*')
-          .or(`id_no.eq.${state.currentPatient.id_no},id_no.eq.ALL`)
+          .eq('id_no', patientId)
           .order('created_at', { ascending: false })
           .limit(50);
-        if (error || !data) return;
 
-        // Find truly new notifications (not yet in local state)
+        const { data: allNotifs, error: e2 } = await sbClient
+          .from('notifications')
+          .select('*')
+          .eq('id_no', 'ALL')
+          .order('created_at', { ascending: false })
+          .limit(50);
+
+        if (e1 && e2) return;
+
+        const data = [
+          ...(patientNotifs || []),
+          ...(allNotifs || [])
+        ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+        if (!data.length) return;
+
+        // إيجاد الإشعارات الجديدة غير الموجودة محلياً
         const existingIds = new Set(state.allNotifications.map(n => String(n.id)));
         const newNotifs = data.filter(n => !existingIds.has(String(n.id)));
 
@@ -1490,15 +1507,19 @@ document.addEventListener('DOMContentLoaded', () => {
           }
           const hasUnread = newNotifs.some(n => !n.is_read);
           if (hasUnread) playNotifSound();
-        } else {
-          // Even if no new notifs, sync read status from DB
-          data.forEach(dbN => {
-            const local = state.allNotifications.find(n => String(n.id) === String(dbN.id));
-            if (local) local.is_read = dbN.is_read;
-          });
-          loadNotificationBadge();
         }
-      } catch(e) {}
+
+        // مزامنة حالة القراءة من قاعدة البيانات
+        data.forEach(dbN => {
+          const local = state.allNotifications.find(n => String(n.id) === String(dbN.id));
+          if (local && local.is_read !== dbN.is_read) {
+            local.is_read = dbN.is_read;
+            local.read_at = dbN.read_at;
+          }
+        });
+        loadNotificationBadge();
+
+      } catch(e) { console.warn('Poll error:', e); }
     }
 
     // On app open: immediately load all notifications from Supabase
@@ -2122,17 +2143,45 @@ async function sendNotification() {
     idNo = document.getElementById('notif-id-no').value.trim();
     if (!idNo) { alertEl.innerHTML = `<div class="alert alert-error">⚠️ أدخل رقم الهوية</div>`; return; }
     if (!state.allPatients.find(p => p.id_no === idNo)) {
-      alertEl.innerHTML = `<div class="alert alert-error">⚠️ المراجع غير موجود</div>`; return;
+      alertEl.innerHTML = `<div class="alert alert-error">⚠️ المراجع غير موجود في قاعدة البيانات</div>`; return;
     }
   }
 
-  const notif = { id: Date.now(), id_no: idNo, title, message, is_read: false, read_at: null, created_at: new Date().toISOString() };
-  state.allNotifications.unshift(notif);
+  // لا نُرسل id — Supabase يولّده تلقائياً
+  const notifPayload = {
+    id_no: idNo,
+    title,
+    message,
+    is_read: false,
+    read_at: null,
+    created_at: new Date().toISOString()
+  };
 
-  // Save to Supabase if connected
+  let savedNotif = null;
+
   if (sbClient && !DEMO_MODE) {
-    try { await sbClient.from('notifications').insert([notif]); } catch(e) {}
+    alertEl.innerHTML = `<div class="alert alert-info">⏳ جاري الإرسال...</div>`;
+    try {
+      const { data, error } = await sbClient
+        .from('notifications')
+        .insert([notifPayload])
+        .select()
+        .single();
+
+      if (error) {
+        alertEl.innerHTML = `<div class="alert alert-error">❌ فشل الحفظ: ${error.message}</div>`;
+        return;
+      }
+      savedNotif = data;
+    } catch(e) {
+      alertEl.innerHTML = `<div class="alert alert-error">❌ خطأ في الاتصال بقاعدة البيانات</div>`;
+      return;
+    }
+  } else {
+    savedNotif = { id: Date.now(), ...notifPayload };
   }
+
+  state.allNotifications.unshift(savedNotif);
 
   alertEl.innerHTML = `<div class="alert alert-success">✅ تم إرسال الإشعار بنجاح</div>`;
   document.getElementById('notif-title').value = '';
@@ -2143,8 +2192,7 @@ async function sendNotification() {
   showToast('✅ تم إرسال الإشعار');
   setTimeout(() => alertEl.innerHTML = '', 3000);
 
-  // Immediately refresh patient notification view if a patient is logged in
-  // and the notification targets them
+  // تحديث فوري لواجهة المراجع إذا كان مسجّلاً دخوله
   if (state.currentPatient) {
     const targetsPatient = idNo === 'ALL' || idNo === state.currentPatient.id_no;
     if (targetsPatient) {
