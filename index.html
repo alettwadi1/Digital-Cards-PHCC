@@ -2768,7 +2768,14 @@ async function processUpload(file) {
         const rowNum = idx + 2; // +1 للعنوان و +1 لأن الفهرس يبدأ من صفر
         const idNo = String(row['ID_No'] || row['id_no'] || row['رقم الهوية'] || '').trim();
         const fullName = String(row['Full_Name'] || row['full_name'] || row['الاسم الكامل'] || '').trim();
-        const mobile = String(row['Mobile_no'] || row['mobile_no'] || row['رقم الجوال'] || '').trim();
+        let mobile = String(row['Mobile_no'] || row['mobile_no'] || row['رقم الجوال'] || '').trim();
+
+        // ── تطبيع رقم الجوال ──
+        if (mobile) {
+          mobile = mobile.replace(/[\s\-()]/g, '');          // إزالة الفراغات والرموز
+          mobile = mobile.replace(/^\+?966/, '');             // إزالة مفتاح الدولة 966 / +966
+          if (/^5\d{8}$/.test(mobile)) mobile = '0' + mobile; // 9 أرقام تبدأ بـ5 → أضف صفراً
+        }
         const dob = String(row['DOB_G'] || row['dob_g'] || row['تاريخ الميلاد'] || '').trim();
         const dobH = String(row['DOB_H'] || row['dob_h'] || row['التاريخ الهجري'] || row['تاريخ الميلاد الهجري'] || '').trim();
 
