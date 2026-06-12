@@ -1686,7 +1686,17 @@ function loadAdminDashboard() {
 
 let patientsSearchQuery = '';
 
-function loadPatientsTable() {
+async function loadPatientsTable() {
+  // Fetch from Supabase if available
+  if (!DEMO_MODE && sbClient) {
+    try {
+      const { data, error } = await sbClient.from('patients').select('*').order('created_at', { ascending: false });
+      if (!error && data) {
+        state.allPatients = data;
+      }
+    } catch(e) {}
+  }
+
   const query = patientsSearchQuery.toLowerCase();
   state.filteredPatients = query
     ? state.allPatients.filter(p =>
@@ -1734,8 +1744,16 @@ function renderPagination() {
 
 function gotoPage(p) { state.patientsPage = p; loadPatientsTable(); }
 
-function deletePatient(idNo) {
+async function deletePatient(idNo) {
   if (!confirm('هل أنت متأكد من حذف هذا المراجع؟')) return;
+
+  if (!DEMO_MODE && sbClient) {
+    try {
+      const { error } = await sbClient.from('patients').delete().eq('id_no', idNo);
+      if (error) { showToast('❌ فشل الحذف: ' + error.message); return; }
+    } catch(e) { showToast('❌ خطأ أثناء الحذف'); return; }
+  }
+
   state.allPatients = state.allPatients.filter(p => p.id_no !== idNo);
   loadPatientsTable();
   loadAdminDashboard();
@@ -1760,8 +1778,26 @@ async function saveNewPatient() {
     return;
   }
 
-  const newP = { id: Date.now(), id_no: idNo, full_name: fullName, mobile_no: mobile, dob_g: dob, created_at: new Date().toISOString() };
-  state.allPatients.unshift(newP);
+  const newP = { id_no: idNo, full_name: fullName, mobile_no: mobile, dob_g: dob };
+
+  // Insert into Supabase
+  if (!DEMO_MODE && sbClient) {
+    try {
+      const { data, error } = await sbClient.from('patients').insert([newP]).select().single();
+      if (error) {
+        alertEl.innerHTML = `<div class="alert alert-error">❌ فشل الحفظ: ${error.message}</div>`;
+        return;
+      }
+      state.allPatients.unshift(data);
+    } catch(e) {
+      alertEl.innerHTML = `<div class="alert alert-error">❌ خطأ في الاتصال</div>`;
+      return;
+    }
+  } else {
+    // Demo mode only
+    state.allPatients.unshift({ ...newP, id: Date.now(), created_at: new Date().toISOString() });
+  }
+
   closeModal('add-patient-modal');
   loadPatientsTable();
   loadAdminDashboard();
