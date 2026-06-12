@@ -2223,7 +2223,9 @@ async function sendNotification() {
 }
 
 function loadSentNotifications() {
-  const list = state.allNotifications.slice(0, 10);
+  const list = [...state.allNotifications]
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+    .slice(0, 20);
   document.getElementById('sent-notifications-list').innerHTML =
     list.map(n => `
       <div class="notif-item">
