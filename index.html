@@ -1737,7 +1737,15 @@ function markRead(id) {
     n.is_read = true;
     n.read_at = new Date().toISOString();
     if (sbClient && !DEMO_MODE) {
-      sbClient.from('notifications').update({ is_read: true, read_at: n.read_at }).eq('id', id).then(() => {});
+      sbClient.from('notifications')
+        .update({ is_read: true, read_at: n.read_at })
+        .eq('id', id)
+        .then(({ error }) => {
+          if (error) {
+            // fallback: update without read_at if column missing
+            sbClient.from('notifications').update({ is_read: true }).eq('id', id).then(() => {});
+          }
+        });
     }
     loadPatientNotifications();
     loadNotificationBadge();
@@ -1771,7 +1779,14 @@ function openNotifDetail(id) {
       document.getElementById('nd-read-at').style.display = 'block';
       document.getElementById('nd-read-time').textContent = formatDate(n.read_at);
       if (sbClient && !DEMO_MODE) {
-        sbClient.from('notifications').update({ is_read: true, read_at: n.read_at }).eq('id', id).then(() => {});
+        sbClient.from('notifications')
+          .update({ is_read: true, read_at: n.read_at })
+          .eq('id', id)
+          .then(({ error }) => {
+            if (error) {
+              sbClient.from('notifications').update({ is_read: true }).eq('id', id).then(() => {});
+            }
+          });
       }
       loadPatientNotifications();
       loadNotificationBadge();
@@ -2149,12 +2164,12 @@ async function sendNotification() {
   }
 
   // لا نُرسل id — Supabase يولّده تلقائياً
+  // لا نُرسل read_at — يُضاف فقط عند القراءة
   const notifPayload = {
     id_no: idNo,
     title,
     message,
     is_read: false,
-    read_at: null,
     created_at: new Date().toISOString()
   };
 
