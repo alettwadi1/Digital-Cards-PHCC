@@ -1719,7 +1719,7 @@ function loadPatientNotifications() {
   }
 
   document.getElementById('notifications-list').innerHTML = notifs.map(n => `
-    <div class="notif-item ${n.is_read ? '' : 'unread'}" onclick="openNotifDetail(${n.id})" style="cursor:pointer">
+    <div class="notif-item ${n.is_read ? '' : 'unread'}" data-notif-id="${n.id}" style="cursor:pointer">
       <div class="notif-dot ${n.is_read ? 'read' : ''}"></div>
       <div style="flex:1">
         <div class="notif-title">${n.title}</div>
@@ -1729,6 +1729,11 @@ function loadPatientNotifications() {
       <div style="color:var(--text-muted);font-size:1rem;margin-right:4px">›</div>
     </div>
   `).join('');
+
+  // Attach click handlers after render
+  document.querySelectorAll('#notifications-list [data-notif-id]').forEach(el => {
+    el.addEventListener('click', () => openNotifDetail(el.dataset.notifId));
+  });
 }
 
 function markRead(id) {
@@ -1754,8 +1759,12 @@ function markRead(id) {
 }
 
 function openNotifDetail(id) {
+  // Match by id regardless of type (string/number)
   const n = state.allNotifications.find(n => String(n.id) === String(id));
-  if (!n) return;
+  if (!n) {
+    console.warn('Notification not found for id:', id);
+    return;
+  }
 
   // Fill modal content
   document.getElementById('nd-title').textContent = n.title;
