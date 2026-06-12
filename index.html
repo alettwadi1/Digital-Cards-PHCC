@@ -1283,6 +1283,35 @@ input:checked + .slider::before { transform: translateX(20px); }
 </div>
 
 <!-- ════════════════════════════════════════ MODALS ═══ -->
+<!-- Notification Detail Modal -->
+<div class="modal-overlay" id="notif-detail-modal">
+  <div class="modal" style="max-width:420px;padding:0;overflow:hidden;border-radius:20px">
+    <!-- Header -->
+    <div style="background:linear-gradient(135deg,#0D4B8F,#052652);padding:1.5rem 1.25rem 1.25rem;position:relative">
+      <button class="modal-close" onclick="closeModal('notif-detail-modal')"
+        style="position:absolute;top:1rem;left:1rem;background:rgba(255,255,255,0.15);color:#fff;border:none">✕</button>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:0.6rem">
+        <span style="font-size:1.6rem">🔔</span>
+        <div id="nd-title" style="font-size:1.05rem;font-weight:700;color:#fff;flex:1;line-height:1.3"></div>
+      </div>
+      <div id="nd-date" style="font-size:0.75rem;color:rgba(255,255,255,0.65)"></div>
+    </div>
+    <!-- Body -->
+    <div style="padding:1.5rem 1.25rem">
+      <div id="nd-message" style="font-size:0.95rem;color:var(--text-primary);line-height:1.8;white-space:pre-wrap"></div>
+      <div id="nd-read-at" style="margin-top:1.25rem;font-size:0.78rem;color:var(--success);display:none">
+        ✅ قُرئ في: <span id="nd-read-time"></span>
+      </div>
+    </div>
+    <!-- Footer -->
+    <div style="padding:0.75rem 1.25rem 1.25rem">
+      <button class="btn btn-primary" onclick="closeModal('notif-detail-modal')" style="width:100%">
+        إغلاق
+      </button>
+    </div>
+  </div>
+</div>
+
 <!-- Add Patient Modal -->
 <div class="modal-overlay" id="add-patient-modal">
   <div class="modal">
@@ -1436,11 +1465,10 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch(e) {}
 
     // ── Real-time notification polling (every 10s) ──
-    setInterval(async () => {
+    async function pollNotifications() {
       if (!state.currentPatient) return;
       if (!sbClient || DEMO_MODE) return;
       try {
-        // Fetch notifications for this patient from Supabase
         const { data, error } = await sbClient
           .from('notifications')
           .select('*')
@@ -1454,24 +1482,31 @@ document.addEventListener('DOMContentLoaded', () => {
         const newNotifs = data.filter(n => !existingIds.has(String(n.id)));
 
         if (newNotifs.length > 0) {
-          // Prepend new notifications, preserving is_read state
-          state.allNotifications = [
-            ...newNotifs,
-            ...state.allNotifications
-          ];
-          // Refresh UI
+          state.allNotifications = [...newNotifs, ...state.allNotifications];
           loadNotificationBadge();
-          // If on notifications tab — refresh list
           const notifTab = document.getElementById('tab-notifications-content');
           if (notifTab && notifTab.style.display !== 'none') {
             loadPatientNotifications();
           }
-          // Play sound for unread new notifications
           const hasUnread = newNotifs.some(n => !n.is_read);
           if (hasUnread) playNotifSound();
+        } else {
+          // Even if no new notifs, sync read status from DB
+          data.forEach(dbN => {
+            const local = state.allNotifications.find(n => String(n.id) === String(dbN.id));
+            if (local) local.is_read = dbN.is_read;
+          });
+          loadNotificationBadge();
         }
       } catch(e) {}
-    }, 10000);
+    }
+
+    // On app open: immediately load all notifications from Supabase
+    if (sbClient && !DEMO_MODE && state.currentPatient) {
+      setTimeout(pollNotifications, 300);
+    }
+
+    setInterval(pollNotifications, 10000);
   }, 2600);
 
   // Fallback: force transition after 3.5s regardless
@@ -1622,18 +1657,14 @@ function renderPatientDetails(p) {
 }
 
 function resetSearch() {
-  // Keep patient data for existing session but prepare fresh search fields
-  state.currentPatient = null;
-  try { sessionStorage.removeItem('currentPatient'); } catch(e) {}
-  // Clear search fields
+  // DON'T clear currentPatient — just navigate to search tab for a new lookup
+  // Clear only the search input fields for new entry
   document.getElementById('search-id').value = '';
   document.getElementById('search-dob').value = '';
   document.getElementById('search-alert').innerHTML = '';
-  // Focus the ID field for fast re-entry
-  try { document.getElementById('search-id').focus(); } catch(e) {}
-  // Hide the card tab (no patient loaded)
-  document.getElementById('tab-details').style.display = 'none';
-  // Switch to search tab
+  // Focus the ID field
+  try { setTimeout(() => document.getElementById('search-id').focus(), 100); } catch(e) {}
+  // Switch to search tab (keep card tab visible if patient is loaded)
   const searchTab = document.querySelector('.tab-item:first-child');
   switchTab('search', searchTab);
 }
@@ -1666,33 +1697,64 @@ function loadPatientNotifications() {
   }
 
   document.getElementById('notifications-list').innerHTML = notifs.map(n => `
-    <div class="notif-item ${n.is_read ? '' : 'unread'}" onclick="markRead(${n.id})">
+    <div class="notif-item ${n.is_read ? '' : 'unread'}" onclick="openNotifDetail(${n.id})" style="cursor:pointer">
       <div class="notif-dot ${n.is_read ? 'read' : ''}"></div>
       <div style="flex:1">
         <div class="notif-title">${n.title}</div>
-        <div class="notif-msg">${n.message}</div>
+        <div class="notif-msg" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${n.message}</div>
         <div class="notif-date">🕐 ${formatDate(n.created_at)}</div>
       </div>
+      <div style="color:var(--text-muted);font-size:1rem;margin-right:4px">›</div>
     </div>
   `).join('');
 }
 
 function markRead(id) {
-  const n = state.allNotifications.find(n => n.id === id);
+  const n = state.allNotifications.find(n => String(n.id) === String(id));
   if (n && !n.is_read) {
     n.is_read = true;
     n.read_at = new Date().toISOString();
-    // Save read_at to Supabase if available
     if (sbClient && !DEMO_MODE) {
       sbClient.from('notifications').update({ is_read: true, read_at: n.read_at }).eq('id', id).then(() => {});
     }
     loadPatientNotifications();
     loadNotificationBadge();
-    // Notify admin panel (update sent notifications list if open)
     if (document.getElementById('sent-notifications-list')) loadSentNotifications();
-  } else if (n) {
-    // Already read — just refresh view
-    loadPatientNotifications();
+  }
+}
+
+function openNotifDetail(id) {
+  const n = state.allNotifications.find(n => String(n.id) === String(id));
+  if (!n) return;
+
+  // Fill modal content
+  document.getElementById('nd-title').textContent = n.title;
+  document.getElementById('nd-message').textContent = n.message;
+  document.getElementById('nd-date').textContent = '🕐 ' + formatDate(n.created_at);
+
+  if (n.is_read && n.read_at) {
+    document.getElementById('nd-read-at').style.display = 'block';
+    document.getElementById('nd-read-time').textContent = formatDate(n.read_at);
+  } else {
+    document.getElementById('nd-read-at').style.display = 'none';
+  }
+
+  openModal('notif-detail-modal');
+
+  // Mark as read after user sees it (800ms)
+  if (!n.is_read) {
+    setTimeout(() => {
+      n.is_read = true;
+      n.read_at = new Date().toISOString();
+      document.getElementById('nd-read-at').style.display = 'block';
+      document.getElementById('nd-read-time').textContent = formatDate(n.read_at);
+      if (sbClient && !DEMO_MODE) {
+        sbClient.from('notifications').update({ is_read: true, read_at: n.read_at }).eq('id', id).then(() => {});
+      }
+      loadPatientNotifications();
+      loadNotificationBadge();
+      if (document.getElementById('sent-notifications-list')) loadSentNotifications();
+    }, 800);
   }
 }
 
