@@ -1496,6 +1496,8 @@ let state = {
   whatsappNumber: localStorage.getItem('clinic_whatsapp') || '',
   groups: JSON.parse(localStorage.getItem('notif_groups') || '[]'),
   selectedGroupId: null,
+  lastUploadErrors: [],
+  lastUploadFileName: '',
 };
 
 // نسخة احتياطية محلية (للوضع غير المتصل أو DEMO)
@@ -2757,52 +2759,121 @@ async function processUpload(file) {
       const rows = XLSX.utils.sheet_to_json(ws);
 
       let inserted = 0, updated = 0, skipped = 0;
-      const errors = [];
-      const toUpsert = [];
+      const errors = [];          // أخطاء التحقق (صفوف خاطئة قبل الحفظ)
+      const dbRejected = [];      // صفوف رفضتها قاعدة البيانات أثناء الحفظ
+      const toUpsert = [];        // السجلات الصحيحة المرشحة للحفظ
+      const seenIds = new Set();  // لكشف التكرار داخل نفس الملف
 
       rows.forEach((row, idx) => {
+        const rowNum = idx + 2; // +1 للعنوان و +1 لأن الفهرس يبدأ من صفر
         const idNo = String(row['ID_No'] || row['id_no'] || row['رقم الهوية'] || '').trim();
         const fullName = String(row['Full_Name'] || row['full_name'] || row['الاسم الكامل'] || '').trim();
         const mobile = String(row['Mobile_no'] || row['mobile_no'] || row['رقم الجوال'] || '').trim();
         const dob = String(row['DOB_G'] || row['dob_g'] || row['تاريخ الميلاد'] || '').trim();
         const dobH = String(row['DOB_H'] || row['dob_h'] || row['التاريخ الهجري'] || row['تاريخ الميلاد الهجري'] || '').trim();
 
-        if (!idNo || !fullName) { skipped++; errors.push(`صف ${idx + 2}: بيانات ناقصة`); return; }
-        if (idNo.length !== 10) { skipped++; errors.push(`صف ${idx + 2}: رقم هوية غير صحيح (${idNo})`); return; }
+        const reject = (reason) => {
+          skipped++;
+          errors.push({ row: rowNum, id_no: idNo, full_name: fullName, mobile_no: mobile, dob_g: dob, dob_h: dobH, reason });
+        };
 
-        const existing = state.allPatients.find(p => p.id_no === idNo);
-        if (existing) {
-          existing.full_name = fullName;
-          existing.mobile_no = mobile;
-          existing.dob_g = dob;
-          existing.dob_h = dobH;
-          updated++;
-        } else {
-          state.allPatients.push({ id: Date.now() + idx, id_no: idNo, full_name: fullName, mobile_no: mobile, dob_g: dob, dob_h: dobH, created_at: new Date().toISOString() });
-          inserted++;
-        }
-        toUpsert.push({ id_no: idNo, full_name: fullName, mobile_no: mobile, dob_g: dob, dob_h: dobH });
+        // ── تجاهل الصفوف الخاطئة والاستمرار في الصحيحة ──
+        if (!idNo && !fullName && !mobile && !dob && !dobH) return; // صف فارغ تماماً — تجاهل صامت
+        if (!idNo || !fullName) return reject('بيانات ناقصة (الهوية أو الاسم)');
+        if (!/^\d{10}$/.test(idNo)) return reject(`رقم هوية غير صحيح (${idNo})`);
+        if (mobile && !/^05\d{8}$/.test(mobile)) return reject(`رقم جوال غير صحيح (${mobile})`);
+        if (seenIds.has(idNo)) return reject(`رقم هوية مكرر داخل الملف (${idNo})`);
+        seenIds.add(idNo);
+
+        toUpsert.push({ _row: rowNum, id_no: idNo, full_name: fullName, mobile_no: mobile, dob_g: dob, dob_h: dobH });
       });
 
-      // كتابة البيانات إلى Supabase
-      let dbError = '';
+      // ── كتابة السجلات الصحيحة إلى Supabase على دفعات معزولة ──
+      // إذا رفضت القاعدة دفعة بسبب صف، نعزل صفوفها فردياً حتى لا تسقط الصحيحة معها
+      let dbConnError = '';
+      const accepted = new Set(); // أرقام صفوف نجح حفظها فعلياً
+
       if (sbClient && !DEMO_MODE && toUpsert.length) {
-        try {
-          const { error } = await sbClient
-            .from('patients')
-            .upsert(toUpsert, { onConflict: 'id_no' });
-          if (error) dbError = error.message;
-        } catch(err) { dbError = 'تعذّر الاتصال بقاعدة البيانات'; }
+        const CHUNK = 200;
+        for (let i = 0; i < toUpsert.length; i += CHUNK) {
+          const slice = toUpsert.slice(i, i + CHUNK);
+          const payload = slice.map(({ _row, ...rest }) => rest);
+          try {
+            const { error } = await sbClient.from('patients').upsert(payload, { onConflict: 'id_no' });
+            if (!error) {
+              slice.forEach(r => accepted.add(r._row));
+            } else {
+              // عزل: نحفظ كل صف على حدة لمعرفة الصف الخاطئ بالضبط
+              for (const r of slice) {
+                const { _row, ...one } = r;
+                const { error: e1 } = await sbClient.from('patients').upsert(one, { onConflict: 'id_no' });
+                if (!e1) {
+                  accepted.add(_row);
+                } else {
+                  skipped++;
+                  dbRejected.push({ row: _row, id_no: r.id_no, full_name: r.full_name, mobile_no: r.mobile_no, dob_g: r.dob_g, dob_h: r.dob_h, reason: 'رفض القاعدة: ' + e1.message });
+                }
+              }
+            }
+          } catch(err) {
+            dbConnError = 'تعذّر الاتصال بقاعدة البيانات';
+            break;
+          }
+        }
+      } else {
+        // وضع تجريبي / بلا اتصال: نعتبر الجميع مقبولاً محلياً
+        toUpsert.forEach(r => accepted.add(r._row));
       }
+
+      // ── تحديث الحالة المحلية للسجلات المقبولة فقط ──
+      toUpsert.forEach((r, i) => {
+        if (!accepted.has(r._row)) return;
+        const existing = state.allPatients.find(p => p.id_no === r.id_no);
+        if (existing) {
+          existing.full_name = r.full_name;
+          existing.mobile_no = r.mobile_no;
+          existing.dob_g = r.dob_g;
+          existing.dob_h = r.dob_h;
+          updated++;
+        } else {
+          state.allPatients.push({ id: Date.now() + i, id_no: r.id_no, full_name: r.full_name, mobile_no: r.mobile_no, dob_g: r.dob_g, dob_h: r.dob_h, created_at: new Date().toISOString() });
+          inserted++;
+        }
+      });
+
+      // ── دمج كل الأخطاء في قائمة واحدة للتقرير المنفصل ──
+      const allErrors = [...errors, ...dbRejected].sort((a, b) => a.row - b.row);
+      state.lastUploadErrors = allErrors;
+      state.lastUploadFileName = file.name;
+
+      const savedCount = inserted + updated;
 
       // Update report
       document.getElementById('rpt-total').textContent = rows.length;
       document.getElementById('rpt-new').textContent = inserted;
       document.getElementById('rpt-upd').textContent = updated;
       document.getElementById('rpt-skip').textContent = skipped;
-      document.getElementById('rpt-errors').innerHTML = (errors.length || dbError)
-        ? `<div class="alert alert-warning"><strong>تنبيهات:</strong><br>${dbError ? '❌ خطأ في الحفظ بقاعدة البيانات: ' + dbError + '<br>' : ''}${errors.slice(0, 5).join('<br>')}</div>`
-        : '';
+
+      let reportHtml = '';
+      if (dbConnError) {
+        reportHtml += `<div class="alert alert-warning"><strong>⚠️ ${dbConnError}</strong><br>تم تحديث البيانات محلياً فقط، يُرجى إعادة الرفع بعد عودة الاتصال.</div>`;
+      }
+      if (allErrors.length) {
+        const preview = allErrors.slice(0, 5).map(er => `صف ${er.row}${er.id_no ? ' (' + er.id_no + ')' : ''}: ${er.reason}`).join('<br>');
+        reportHtml += `
+          <div class="alert alert-warning">
+            <strong>⚠️ تم تجاهل ${allErrors.length} سجل خاطئ</strong> (حُفظ ${savedCount} سجل صحيح بنجاح).<br>
+            ${preview}
+            ${allErrors.length > 5 ? `<br>… و${allErrors.length - 5} أخطاء أخرى.` : ''}
+            <br><br>
+            <button class="btn btn-sm btn-danger" onclick="downloadErrorReport()" style="margin-top:6px">
+              ⬇️ تنزيل تقرير السجلات الخاطئة (${allErrors.length})
+            </button>
+          </div>`;
+      } else if (!dbConnError) {
+        reportHtml += `<div class="alert alert-success"><strong>✅ تم حفظ جميع السجلات (${savedCount}) بدون أخطاء.</strong></div>`;
+      }
+      document.getElementById('rpt-errors').innerHTML = reportHtml;
       document.getElementById('upload-report').style.display = 'block';
 
       // Add to history
@@ -2810,16 +2881,37 @@ async function processUpload(file) {
         id: Date.now(), file_name: file.name,
         uploaded_by: state.currentAdminUser?.username || 'admin',
         total_rows: rows.length, inserted_rows: inserted, updated_rows: updated, skipped_rows: skipped,
-        status: dbError ? 'error' : 'success', created_at: new Date().toISOString()
+        status: dbConnError ? 'error' : (allErrors.length ? 'partial' : 'success'), created_at: new Date().toISOString()
       });
 
       loadAdminDashboard();
-      showToast(dbError ? '⚠️ رُفع محلياً لكن فشل الحفظ بالقاعدة' : `✅ تم رفع ${rows.length} سجل`);
+      if (dbConnError) showToast('⚠️ حُفظ محلياً فقط — تعذّر الاتصال بالقاعدة');
+      else if (allErrors.length) showToast(`✅ حُفظ ${savedCount} سجل · ⚠️ تجاهل ${allErrors.length} خاطئ`);
+      else showToast(`✅ تم رفع ${savedCount} سجل بنجاح`);
     } catch(err) {
       showToast('❌ خطأ في قراءة الملف');
     }
   };
   reader.readAsBinaryString(file);
+}
+
+function downloadErrorReport() {
+  if (!window.XLSX) { showToast('⚠️ تعذّر إنشاء التقرير'); return; }
+  const errs = state.lastUploadErrors || [];
+  if (!errs.length) { showToast('لا توجد سجلات خاطئة'); return; }
+
+  const aoa = [
+    ['رقم الصف', 'ID_No', 'Full_Name', 'Mobile_no', 'DOB_G', 'DOB_H', 'سبب الرفض'],
+    ...errs.map(e => [e.row, e.id_no, e.full_name, e.mobile_no, e.dob_g, e.dob_h, e.reason])
+  ];
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = [{wch:8},{wch:14},{wch:24},{wch:14},{wch:12},{wch:12},{wch:40}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'السجلات الخاطئة');
+
+  const base = (state.lastUploadFileName || 'upload').replace(/\.(xlsx|xls|csv)$/i, '');
+  XLSX.writeFile(wb, `errors_${base}.xlsx`);
+  showToast(`✅ تم تنزيل تقرير ${errs.length} سجل خاطئ`);
 }
 
 function downloadTemplate() {
@@ -2844,8 +2936,8 @@ function loadHistoryTable() {
         <td>${formatDate(h.created_at)}</td>
         <td>${h.uploaded_by}</td>
         <td>${h.total_rows} (↑${h.inserted_rows} ↻${h.updated_rows})</td>
-        <td><span class="chip ${h.status === 'success' ? 'chip-success' : 'chip-danger'}">
-          ${h.status === 'success' ? '✅ ناجح' : '❌ فشل'}
+        <td><span class="chip ${h.status === 'success' ? 'chip-success' : (h.status === 'partial' ? 'chip-warning' : 'chip-danger')}">
+          ${h.status === 'success' ? '✅ ناجح' : (h.status === 'partial' ? '⚠️ جزئي' : '❌ فشل')}
         </span></td>
       </tr>
     `).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:2rem">لا يوجد سجل</td></tr>';
