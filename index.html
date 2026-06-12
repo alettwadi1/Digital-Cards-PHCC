@@ -1156,12 +1156,18 @@ input:checked + .slider::before { transform: translateX(20px); }
             <div class="recipient-selector">
               <button class="recipient-chip active" onclick="selectRecipient('all', this)">الكل</button>
               <button class="recipient-chip" onclick="selectRecipient('one', this)">مراجع محدد</button>
+              <button class="recipient-chip" onclick="selectRecipient('group', this)">مجموعة محددة</button>
             </div>
           </div>
           <div class="form-group" id="recipient-id-group" style="display:none">
             <label>رقم الهوية</label>
             <input type="text" id="notif-id-no" placeholder="أدخل رقم الهوية" oninput="lookupPatientForNotif(this.value)">
             <div id="notif-patient-name" style="margin-top:6px;font-size:0.85rem;color:var(--primary);font-weight:600;min-height:20px"></div>
+          </div>
+          <div class="form-group" id="recipient-group-group" style="display:none">
+            <label>اختر المجموعة</label>
+            <select id="notif-group-select" onchange="onNotifGroupChange()"></select>
+            <div id="notif-group-info" style="margin-top:6px;font-size:0.85rem;color:var(--primary);font-weight:600;min-height:20px"></div>
           </div>
           <div class="form-group">
             <label>عنوان الإشعار</label>
@@ -1189,6 +1195,22 @@ input:checked + .slider::before { transform: translateX(20px); }
               <p>لا توجد إشعارات مرسلة</p>
             </div>
           </div>
+        </div>
+
+        <!-- Groups management -->
+        <div class="card" style="margin-top:1.5rem">
+          <div class="card-header">
+            <div class="card-icon" style="background:#E8F5E9">👥</div>
+            <div><div class="card-title">مجموعات المراجعين</div></div>
+          </div>
+          <div class="form-group" style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
+            <div style="flex:1;min-width:180px">
+              <label>اسم مجموعة جديدة</label>
+              <input type="text" id="new-group-name" placeholder="مثال: مرضى السكري">
+            </div>
+            <button class="btn btn-primary" style="white-space:nowrap" onclick="createGroup()">➕ إنشاء</button>
+          </div>
+          <div id="groups-list"></div>
         </div>
       </div>
 
@@ -1351,6 +1373,26 @@ input:checked + .slider::before { transform: translateX(20px); }
   </div>
 </div>
 
+<!-- Group Members Modal -->
+<div class="modal-overlay" id="group-members-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="group-modal-title">👥 أعضاء المجموعة</div>
+      <button class="modal-close" onclick="closeModal('group-members-modal')">✕</button>
+    </div>
+    <div class="form-group">
+      <label>إضافة مراجع للمجموعة</label>
+      <input type="text" id="group-member-search" placeholder="ابحث بالاسم أو رقم الهوية..." oninput="renderGroupMemberSearch(this.value)">
+    </div>
+    <div id="group-member-results" style="max-height:200px;overflow-y:auto;margin-bottom:1rem"></div>
+    <label style="font-size:0.85rem;color:var(--text-secondary)">الأعضاء الحاليون</label>
+    <div id="group-current-members" style="max-height:220px;overflow-y:auto;margin-top:6px"></div>
+    <div style="margin-top:1rem">
+      <button class="btn btn-primary" onclick="closeModal('group-members-modal')" style="width:100%">تم</button>
+    </div>
+  </div>
+</div>
+
 <!-- Toast -->
 <div id="toast" style="
   position:fixed;bottom:2rem;left:50%;transform:translateX(-50%) translateY(100px);
@@ -1398,7 +1440,36 @@ let state = {
   filteredPatients: [...DEMO_PATIENTS],
   notifRecipient: 'all',
   whatsappNumber: localStorage.getItem('clinic_whatsapp') || '',
+  groups: JSON.parse(localStorage.getItem('notif_groups') || '[]'),
+  selectedGroupId: null,
 };
+
+// نسخة احتياطية محلية (للوضع غير المتصل أو DEMO)
+function cacheGroupsLocal() {
+  localStorage.setItem('notif_groups', JSON.stringify(state.groups));
+}
+
+// تحميل المجموعات من Supabase (مع الرجوع للنسخة المحلية عند الفشل)
+async function loadGroups() {
+  if (sbClient && !DEMO_MODE) {
+    try {
+      const { data, error } = await sbClient
+        .from('groups')
+        .select('*')
+        .order('created_at', { ascending: true });
+      if (!error && data) {
+        state.groups = data.map(g => ({
+          id: g.id,
+          name: g.name,
+          members: Array.isArray(g.members) ? g.members.map(String) : [],
+          created_at: g.created_at,
+        }));
+        cacheGroupsLocal();
+      }
+    } catch(e) { /* نُبقي النسخة المحلية */ }
+  }
+  try { renderGroupsList(); } catch(e) {}
+}
 
 // Format mobile: remove leading 0 and add 966
 function formatMobile(mobile) {
@@ -1444,6 +1515,7 @@ document.addEventListener('DOMContentLoaded', () => {
         sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
       }
     } catch(e) {}
+    try { loadGroups(); } catch(e) {}
   });
 
   setTimeout(() => {
@@ -1895,6 +1967,7 @@ function adminNav(page, el) {
   if (page === 'history') loadHistoryTable();
   if (page === 'notifications') {
     loadSentNotifications();
+    renderGroupsList();
     // Set default message for "all" recipient
     const msgEl = document.getElementById('notif-message');
     if (msgEl && !msgEl.value) msgEl.value = 'عزيزي مراجع مركز صحي الشقيق،\n';
@@ -2128,10 +2201,193 @@ function selectRecipient(type, el) {
   el.classList.add('active');
   state.notifRecipient = type;
   document.getElementById('recipient-id-group').style.display = type === 'one' ? 'block' : 'none';
+  document.getElementById('recipient-group-group').style.display = type === 'group' ? 'block' : 'none';
   if (type === 'all') {
     document.getElementById('notif-patient-name').textContent = '';
     document.getElementById('notif-message').value = 'عزيزي مراجع مركز صحي الشقيق،\n';
   }
+  if (type === 'group') {
+    populateGroupSelect();
+    document.getElementById('notif-message').value = 'عزيزي مراجع مركز صحي الشقيق،\n';
+  }
+}
+
+// ── اختيار المجموعة في شاشة الإرسال ──
+function populateGroupSelect() {
+  const sel = document.getElementById('notif-group-select');
+  if (!state.groups.length) {
+    sel.innerHTML = '<option value="">لا توجد مجموعات — أنشئ مجموعة أولاً</option>';
+    document.getElementById('notif-group-info').textContent = '';
+    state.selectedGroupId = null;
+    return;
+  }
+  sel.innerHTML = '<option value="">— اختر مجموعة —</option>' +
+    state.groups.map(g => `<option value="${g.id}">${g.name} (${g.members.length})</option>`).join('');
+  onNotifGroupChange();
+}
+
+function onNotifGroupChange() {
+  const sel = document.getElementById('notif-group-select');
+  const info = document.getElementById('notif-group-info');
+  state.selectedGroupId = sel.value || null;
+  const g = state.groups.find(x => String(x.id) === String(sel.value));
+  info.textContent = g ? `✅ ${g.members.length} مراجع في هذه المجموعة` : '';
+}
+
+// ══════════════════════════════════════════ GROUPS MANAGEMENT ══
+
+async function createGroup() {
+  const input = document.getElementById('new-group-name');
+  const name = input.value.trim();
+  if (!name) { showToast('⚠️ أدخل اسم المجموعة'); return; }
+  if (state.groups.some(g => g.name === name)) { showToast('⚠️ يوجد مجموعة بنفس الاسم'); return; }
+
+  if (sbClient && !DEMO_MODE) {
+    try {
+      const { data, error } = await sbClient
+        .from('groups')
+        .insert([{ name, members: [] }])
+        .select()
+        .single();
+      if (error) { showToast('❌ فشل إنشاء المجموعة'); return; }
+      state.groups.push({ id: data.id, name: data.name, members: [], created_at: data.created_at });
+    } catch(e) { showToast('❌ خطأ في الاتصال'); return; }
+  } else {
+    state.groups.push({ id: Date.now(), name, members: [] });
+  }
+
+  cacheGroupsLocal();
+  input.value = '';
+  renderGroupsList();
+  showToast('✅ تم إنشاء المجموعة');
+}
+
+async function deleteGroup(id) {
+  const g = state.groups.find(x => String(x.id) === String(id));
+  if (!g) return;
+  if (!confirm(`حذف مجموعة "${g.name}"؟`)) return;
+
+  if (sbClient && !DEMO_MODE) {
+    try {
+      const { error } = await sbClient.from('groups').delete().eq('id', id);
+      if (error) { showToast('❌ فشل الحذف'); return; }
+    } catch(e) { showToast('❌ خطأ في الاتصال'); return; }
+  }
+
+  state.groups = state.groups.filter(x => String(x.id) !== String(id));
+  cacheGroupsLocal();
+  renderGroupsList();
+  showToast('✅ تم حذف المجموعة');
+}
+
+// حفظ أعضاء مجموعة واحدة إلى Supabase
+async function persistGroupMembers(g) {
+  if (sbClient && !DEMO_MODE) {
+    try {
+      await sbClient.from('groups').update({ members: g.members }).eq('id', g.id);
+    } catch(e) { /* تبقى النسخة المحلية */ }
+  }
+  cacheGroupsLocal();
+}
+
+function renderGroupsList() {
+  const el = document.getElementById('groups-list');
+  if (!el) return;
+  if (!state.groups.length) {
+    el.innerHTML = `<div class="empty-state" style="padding:1.5rem"><div class="empty-icon">👥</div><p>لا توجد مجموعات بعد</p></div>`;
+    return;
+  }
+  el.innerHTML = state.groups.map(g => `
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;border:1px solid var(--border);border-radius:12px;margin-top:8px">
+      <div style="min-width:0">
+        <div style="font-weight:600">${g.name}</div>
+        <div style="font-size:0.78rem;color:var(--text-secondary)">${g.members.length} مراجع</div>
+      </div>
+      <div style="display:flex;gap:6px;flex-shrink:0">
+        <button class="btn btn-outline" style="padding:5px 12px;font-size:0.8rem" onclick="openGroupMembers(${g.id})">👥 الأعضاء</button>
+        <button class="btn btn-outline" style="padding:5px 10px;font-size:0.8rem;color:var(--danger,#e53935);border-color:var(--danger,#e53935)" onclick="deleteGroup(${g.id})">🗑️</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+let activeGroupId = null;
+
+function openGroupMembers(id) {
+  const g = state.groups.find(x => String(x.id) === String(id));
+  if (!g) return;
+  activeGroupId = id;
+  document.getElementById('group-modal-title').textContent = `👥 ${g.name}`;
+  document.getElementById('group-member-search').value = '';
+  document.getElementById('group-member-results').innerHTML = '';
+  renderGroupCurrentMembers();
+  openModal('group-members-modal');
+}
+
+function renderGroupMemberSearch(query) {
+  const el = document.getElementById('group-member-results');
+  query = String(query || '')
+    .replace(/[\u0660-\u0669]/g, d => d.charCodeAt(0) - 0x0660)
+    .replace(/[\u06F0-\u06F9]/g, d => d.charCodeAt(0) - 0x06F0)
+    .trim();
+  if (!query) { el.innerHTML = ''; return; }
+  const g = state.groups.find(x => String(x.id) === String(activeGroupId));
+  const q = query.toLowerCase();
+  const matches = state.allPatients.filter(p =>
+    (String(p.id_no).includes(query) || (p.full_name || '').toLowerCase().includes(q)) &&
+    !g.members.includes(String(p.id_no))
+  ).slice(0, 8);
+  if (!matches.length) { el.innerHTML = `<div style="font-size:0.82rem;color:var(--text-secondary);padding:6px">لا نتائج</div>`; return; }
+  el.innerHTML = matches.map(p => `
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;border-bottom:1px solid var(--border)">
+      <div style="min-width:0">
+        <div style="font-weight:600;font-size:0.88rem">${p.full_name}</div>
+        <div style="font-size:0.76rem;color:var(--text-secondary)">${p.id_no}</div>
+      </div>
+      <button class="btn btn-primary" style="padding:4px 12px;font-size:0.8rem;flex-shrink:0" onclick="addMemberToGroup('${p.id_no}')">➕</button>
+    </div>
+  `).join('');
+}
+
+function addMemberToGroup(idNo) {
+  const g = state.groups.find(x => String(x.id) === String(activeGroupId));
+  if (!g) return;
+  idNo = String(idNo);
+  if (!g.members.includes(idNo)) g.members.push(idNo);
+  persistGroupMembers(g);
+  renderGroupCurrentMembers();
+  renderGroupMemberSearch(document.getElementById('group-member-search').value);
+  renderGroupsList();
+}
+
+function removeMemberFromGroup(idNo) {
+  const g = state.groups.find(x => String(x.id) === String(activeGroupId));
+  if (!g) return;
+  g.members = g.members.filter(m => String(m) !== String(idNo));
+  persistGroupMembers(g);
+  renderGroupCurrentMembers();
+  renderGroupsList();
+}
+
+function renderGroupCurrentMembers() {
+  const el = document.getElementById('group-current-members');
+  const g = state.groups.find(x => String(x.id) === String(activeGroupId));
+  if (!g || !g.members.length) {
+    el.innerHTML = `<div style="font-size:0.82rem;color:var(--text-secondary);padding:8px">لا يوجد أعضاء بعد</div>`;
+    return;
+  }
+  el.innerHTML = g.members.map(idNo => {
+    const p = state.allPatients.find(x => String(x.id_no) === String(idNo));
+    const name = p ? p.full_name : '(غير موجود)';
+    return `
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;border-bottom:1px solid var(--border)">
+        <div style="min-width:0">
+          <div style="font-weight:600;font-size:0.88rem">${name}</div>
+          <div style="font-size:0.76rem;color:var(--text-secondary)">${idNo}</div>
+        </div>
+        <button class="btn btn-outline" style="padding:4px 10px;font-size:0.8rem;flex-shrink:0;color:var(--danger,#e53935);border-color:var(--danger,#e53935)" onclick="removeMemberFromGroup('${idNo}')">✕</button>
+      </div>`;
+  }).join('');
 }
 
 function lookupPatientForNotif(idNo) {
@@ -2173,9 +2429,12 @@ async function sendNotification() {
     return;
   }
 
-  let idNo = 'ALL';
-  if (state.notifRecipient === 'one') {
-    idNo = String(document.getElementById('notif-id-no').value)
+  // تحديد قائمة المستلمين: ['ALL'] أو قائمة أرقام هويات
+  let recipients = [];
+  if (state.notifRecipient === 'all') {
+    recipients = ['ALL'];
+  } else if (state.notifRecipient === 'one') {
+    const idNo = String(document.getElementById('notif-id-no').value)
       .replace(/[\u0660-\u0669]/g, d => d.charCodeAt(0) - 0x0660)
       .replace(/[\u06F0-\u06F9]/g, d => d.charCodeAt(0) - 0x06F0)
       .replace(/\s+/g, '')
@@ -2184,45 +2443,51 @@ async function sendNotification() {
     if (!state.allPatients.find(p => String(p.id_no).trim() === idNo)) {
       alertEl.innerHTML = `<div class="alert alert-error">⚠️ المراجع غير موجود في قاعدة البيانات</div>`; return;
     }
+    recipients = [idNo];
+  } else if (state.notifRecipient === 'group') {
+    const g = state.groups.find(x => String(x.id) === String(state.selectedGroupId));
+    if (!g) { alertEl.innerHTML = `<div class="alert alert-error">⚠️ اختر مجموعة</div>`; return; }
+    if (!g.members.length) { alertEl.innerHTML = `<div class="alert alert-error">⚠️ المجموعة فارغة — أضف مراجعين أولاً</div>`; return; }
+    recipients = [...g.members];
   }
 
-  // لا نُرسل id — Supabase يولّده تلقائياً
-  // لا نُرسل read_at — يُضاف فقط عند القراءة
-  const notifPayload = {
+  const buildPayload = (idNo) => ({
     id_no: idNo,
     title,
     message,
     is_read: false,
     created_at: new Date().toISOString()
-  };
+  });
 
-  let savedNotif = null;
+  let savedNotifs = [];
 
   if (sbClient && !DEMO_MODE) {
     alertEl.innerHTML = `<div class="alert alert-info">⏳ جاري الإرسال...</div>`;
     try {
+      const payloads = recipients.map(buildPayload);
       const { data, error } = await sbClient
         .from('notifications')
-        .insert([notifPayload])
-        .select()
-        .single();
+        .insert(payloads)
+        .select();
 
       if (error) {
         alertEl.innerHTML = `<div class="alert alert-error">❌ فشل الحفظ: ${error.message}</div>`;
         return;
       }
-      savedNotif = data;
+      savedNotifs = data || [];
     } catch(e) {
       alertEl.innerHTML = `<div class="alert alert-error">❌ خطأ في الاتصال بقاعدة البيانات</div>`;
       return;
     }
   } else {
-    savedNotif = { id: Date.now(), ...notifPayload };
+    savedNotifs = recipients.map((idNo, i) => ({ id: Date.now() + i, ...buildPayload(idNo) }));
   }
 
-  state.allNotifications.unshift(savedNotif);
+  // أضف للأحدث أولاً
+  savedNotifs.slice().reverse().forEach(n => state.allNotifications.unshift(n));
 
-  alertEl.innerHTML = `<div class="alert alert-success">✅ تم إرسال الإشعار بنجاح</div>`;
+  const countMsg = recipients.length > 1 ? ` (${recipients.length} مراجع)` : '';
+  alertEl.innerHTML = `<div class="alert alert-success">✅ تم إرسال الإشعار بنجاح${countMsg}</div>`;
   document.getElementById('notif-title').value = '';
   document.getElementById('notif-message').value = '';
   document.getElementById('notif-id-no').value = '';
@@ -2233,7 +2498,8 @@ async function sendNotification() {
 
   // تحديث فوري لواجهة المراجع إذا كان مسجّلاً دخوله
   if (state.currentPatient) {
-    const targetsPatient = idNo === 'ALL' || idNo === state.currentPatient.id_no;
+    const targetsPatient = recipients.includes('ALL') ||
+      recipients.some(r => String(r) === String(state.currentPatient.id_no));
     if (targetsPatient) {
       loadNotificationBadge();
       const notifContent = document.getElementById('tab-notifications-content');
