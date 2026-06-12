@@ -1185,9 +1185,12 @@ input:checked + .slider::before { transform: translateX(20px); }
 
         <!-- Sent notifications -->
         <div class="card" style="margin-top:1.5rem">
-          <div class="card-header">
-            <div class="card-icon" style="background:var(--primary-50)">📋</div>
-            <div><div class="card-title">الإشعارات المرسلة</div></div>
+          <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+            <div style="display:flex;align-items:center;gap:10px">
+              <div class="card-icon" style="background:var(--primary-50)">📋</div>
+              <div><div class="card-title">الإشعارات المرسلة</div></div>
+            </div>
+            <button class="btn btn-outline" id="refresh-sent-btn" style="padding:6px 14px;font-size:0.82rem;white-space:nowrap" onclick="refreshSentNotifications()">🔄 تحديث</button>
           </div>
           <div id="sent-notifications-list">
             <div class="empty-state" style="padding:2rem">
@@ -1208,7 +1211,7 @@ input:checked + .slider::before { transform: translateX(20px); }
               <label>اسم مجموعة جديدة</label>
               <input type="text" id="new-group-name" placeholder="مثال: مرضى السكري">
             </div>
-            <button class="btn btn-primary" style="white-space:nowrap" onclick="createGroup()">➕ إنشاء</button>
+            <button class="btn btn-primary" style="width:auto;white-space:nowrap" onclick="createGroup()">➕ إنشاء</button>
           </div>
           <div id="groups-list"></div>
         </div>
@@ -2304,8 +2307,8 @@ function renderGroupsList() {
         <div style="font-size:0.78rem;color:var(--text-secondary)">${g.members.length} مراجع</div>
       </div>
       <div style="display:flex;gap:6px;flex-shrink:0">
-        <button class="btn btn-outline" style="padding:5px 12px;font-size:0.8rem" onclick="openGroupMembers(${g.id})">👥 الأعضاء</button>
-        <button class="btn btn-outline" style="padding:5px 10px;font-size:0.8rem;color:var(--danger,#e53935);border-color:var(--danger,#e53935)" onclick="deleteGroup(${g.id})">🗑️</button>
+        <button class="btn btn-outline" style="width:auto;padding:6px 14px;font-size:0.82rem" onclick="openGroupMembers(${g.id})">👥 الأعضاء</button>
+        <button class="btn btn-outline" style="width:auto;padding:6px 12px;font-size:0.82rem;color:var(--danger,#e53935);border-color:var(--danger,#e53935)" onclick="deleteGroup(${g.id})">🗑️</button>
       </div>
     </div>
   `).join('');
@@ -2344,7 +2347,7 @@ function renderGroupMemberSearch(query) {
         <div style="font-weight:600;font-size:0.88rem">${p.full_name}</div>
         <div style="font-size:0.76rem;color:var(--text-secondary)">${p.id_no}</div>
       </div>
-      <button class="btn btn-primary" style="padding:4px 12px;font-size:0.8rem;flex-shrink:0" onclick="addMemberToGroup('${p.id_no}')">➕</button>
+      <button class="btn btn-primary" style="width:auto;padding:6px 14px;font-size:0.9rem;flex-shrink:0" onclick="addMemberToGroup('${p.id_no}')">➕</button>
     </div>
   `).join('');
 }
@@ -2385,7 +2388,7 @@ function renderGroupCurrentMembers() {
           <div style="font-weight:600;font-size:0.88rem">${name}</div>
           <div style="font-size:0.76rem;color:var(--text-secondary)">${idNo}</div>
         </div>
-        <button class="btn btn-outline" style="padding:4px 10px;font-size:0.8rem;flex-shrink:0;color:var(--danger,#e53935);border-color:var(--danger,#e53935)" onclick="removeMemberFromGroup('${idNo}')">✕</button>
+        <button class="btn btn-outline" style="width:auto;padding:6px 12px;font-size:0.9rem;flex-shrink:0;color:var(--danger,#e53935);border-color:var(--danger,#e53935)" onclick="removeMemberFromGroup('${idNo}')">✕</button>
       </div>`;
   }).join('');
 }
@@ -2508,6 +2511,19 @@ async function sendNotification() {
       }
       playNotifSound();
     }
+  }
+}
+
+async function refreshSentNotifications() {
+  const btn = document.getElementById('refresh-sent-btn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="loading-spinner"></span> جارٍ التحديث'; }
+  try {
+    await loadSentNotifications();
+    showToast('✅ تم تحديث القائمة');
+  } catch(e) {
+    showToast('⚠️ تعذّر التحديث');
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '🔄 تحديث'; }
   }
 }
 
