@@ -277,6 +277,12 @@ input:focus, select:focus, textarea:focus {
 }
 input::placeholder { color: var(--text-muted); }
 
+/* صيغة التاريخ تُعرض LTR دائماً (وإلا انعكست الأجزاء في RTL) مع محاذاة لليمين */
+input[type=date] { direction: ltr; text-align: right; }
+input[type=date]::-webkit-datetime-edit { direction: ltr; }
+/* إخفاء صيغة التاريخ الافتراضية حتى يُختار تاريخ (يتحكم بها JS عبر class) */
+input[type=date].date-empty:not(:focus)::-webkit-datetime-edit { opacity: 0; }
+
 /* ─── BUTTONS ─── */
 .btn {
   display: inline-flex;
@@ -368,6 +374,7 @@ input::placeholder { color: var(--text-muted); }
   padding: 0.75rem 1rem;
   line-height: 1.2;
   color: #fff;
+  direction: ltr;
   text-align: right;
   position: relative;
 }
@@ -384,14 +391,31 @@ input::placeholder { color: var(--text-muted); }
   text-align: right;
   color: #fff;
 }
-/* لون نص التاريخ الفارغ */
-.search-form input[type=date]:not(:focus):invalid::-webkit-datetime-edit {
-  color: rgba(255,255,255,0.55);
-}
+/* صيغة التاريخ منطقياً LTR حتى لا تنعكس الأجزاء */
 .search-form input[type=date]::-webkit-datetime-edit {
+  direction: ltr;
+  text-align: right;
   padding: 0;
 }
+/* إخفاء نص التاريخ الافتراضي عندما يكون الحقل فارغاً (يظهر فارغاً نظيفاً) */
+.search-form input[type=date].date-empty:not(:focus)::-webkit-datetime-edit {
+  opacity: 0;
+}
 .search-form input:focus { background: rgba(255,255,255,0.18); border-color: rgba(255,255,255,0.5); box-shadow: none; }
+.cal-chip {
+  flex: 1;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  color: rgba(255,255,255,0.85);
+  background: rgba(255,255,255,0.10);
+  border: 1.5px solid rgba(255,255,255,0.25);
+  transition: all 0.2s;
+}
+.cal-chip.active { background: #fff; color: var(--primary); border-color: #fff; }
 .btn-white { background: #fff; color: var(--primary); font-weight: 700; }
 .btn-white:hover { background: rgba(255,255,255,0.9); transform: translateY(-1px); }
 .btn-white:disabled { opacity: 0.7; cursor: not-allowed; transform: none; }
@@ -960,7 +984,12 @@ input:checked + .slider::before { transform: translateX(20px); }
           </div>
           <div>
             <label style="color:rgba(255,255,255,0.8);font-size:0.8rem;display:block;margin-bottom:5px">تاريخ الميلاد</label>
-            <input type="date" id="search-dob">
+            <div class="cal-toggle" style="display:flex;gap:6px;margin-bottom:8px">
+              <button type="button" id="cal-g-btn" class="cal-chip active" onclick="setCalType('g')">ميلادي</button>
+              <button type="button" id="cal-h-btn" class="cal-chip" onclick="setCalType('h')">هجري</button>
+            </div>
+            <input type="text" id="search-dob" inputmode="numeric" dir="ltr" placeholder="مثال: 1990/05/15" style="text-align:right">
+            <div id="dob-hint" style="color:rgba(255,255,255,0.6);font-size:0.72rem;margin-top:4px">أدخل التاريخ بصيغة: سنة/شهر/يوم</div>
           </div>
         </div>
         <button class="btn btn-white" onclick="searchPatient()" id="search-btn">
@@ -1383,8 +1412,12 @@ input:checked + .slider::before { transform: translateX(20px); }
       <input type="text" id="new-mobile" placeholder="05XXXXXXXX">
     </div>
     <div class="form-group">
-      <label>تاريخ الميلاد *</label>
-      <input type="date" id="new-dob">
+      <label>تاريخ الميلاد (ميلادي) *</label>
+      <input type="text" id="new-dob" dir="ltr" inputmode="numeric" placeholder="مثال: 1990/05/15" style="text-align:right">
+    </div>
+    <div class="form-group">
+      <label>تاريخ الميلاد (هجري)</label>
+      <input type="text" id="new-dob-h" dir="ltr" inputmode="numeric" placeholder="مثال: 1411/11/20" style="text-align:right">
     </div>
     <div id="add-patient-alert"></div>
     <div style="display:flex;gap:10px;margin-top:1rem">
@@ -1537,6 +1570,15 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     } catch(e) {}
     try { loadGroups(); } catch(e) {}
+    // إظهار/إخفاء صيغة التاريخ الافتراضية حسب امتلاء الحقل
+    try {
+      document.querySelectorAll('input[type=date]').forEach(inp => {
+        const sync = () => inp.classList.toggle('date-empty', !inp.value);
+        sync();
+        inp.addEventListener('input', sync);
+        inp.addEventListener('change', sync);
+      });
+    } catch(e) {}
   });
 
   setTimeout(() => {
@@ -1662,13 +1704,53 @@ function switchTab(tab, el) {
 
 // ══════════════════════════════════════════ SEARCH ══
 
+// نوع التقويم المختار للبحث: 'g' ميلادي أو 'h' هجري
+let searchCalType = 'g';
+
+function setCalType(type) {
+  searchCalType = type;
+  document.getElementById('cal-g-btn').classList.toggle('active', type === 'g');
+  document.getElementById('cal-h-btn').classList.toggle('active', type === 'h');
+  const inp = document.getElementById('search-dob');
+  const hint = document.getElementById('dob-hint');
+  if (type === 'g') {
+    inp.placeholder = 'مثال: 1990/05/15';
+    hint.textContent = 'التاريخ الميلادي بصيغة: سنة/شهر/يوم';
+  } else {
+    inp.placeholder = 'مثال: 1411/11/20';
+    hint.textContent = 'التاريخ الهجري بصيغة: سنة/شهر/يوم';
+  }
+  inp.value = '';
+}
+
+// تطبيع التاريخ: أرقام إنجليزية، فواصل موحّدة (/)، إزالة الأصفار البادئة من الشهر/اليوم
+function normalizeDate(val) {
+  if (val == null) return '';
+  let s = String(val)
+    .replace(/[\u0660-\u0669]/g, d => d.charCodeAt(0) - 0x0660)
+    .replace(/[\u06F0-\u06F9]/g, d => d.charCodeAt(0) - 0x06F0)
+    .trim()
+    .replace(/[-.\s]/g, '/');           // توحيد كل الفواصل إلى /
+  const parts = s.split('/').filter(Boolean);
+  if (parts.length !== 3) return s;     // صيغة غير متوقعة — نُعيدها كما هي
+  let [a, b, c] = parts;
+  // إذا كان الجزء الأول سنة (4 خانات) فالترتيب سنة/شهر/يوم، وإلا يوم/شهر/سنة
+  let y, m, d;
+  if (a.length === 4) { y = a; m = b; d = c; }
+  else { d = a; m = b; y = c; }
+  m = String(parseInt(m, 10));
+  d = String(parseInt(d, 10));
+  return `${y}/${m}/${d}`;
+}
+
 async function searchPatient() {
   const idNo = document.getElementById('search-id').value.trim();
-  const dob = document.getElementById('search-dob').value;
+  const dobRaw = document.getElementById('search-dob').value;
+  const dob = normalizeDate(dobRaw);
   const alertEl = document.getElementById('search-alert');
   alertEl.innerHTML = '';
 
-  if (!idNo || !dob) {
+  if (!idNo || !dobRaw.trim()) {
     alertEl.innerHTML = `<div class="alert alert-error">⚠️ يرجى إدخال رقم الهوية وتاريخ الميلاد</div>`;
     return;
   }
@@ -1686,11 +1768,20 @@ async function searchPatient() {
 
   let patient = null;
 
+  // المطابقة: نجلب السجل برقم الهوية ثم نطابق التاريخ (هجري أو ميلادي) بعد التطبيع
+  const dobField = searchCalType === 'h' ? 'dob_h' : 'dob_g';
+
   if (DEMO_MODE) {
-    patient = state.allPatients.find(p => p.id_no === idNo && p.dob_g === dob);
+    patient = state.allPatients.find(p =>
+      String(p.id_no).trim() === idNo && normalizeDate(p[dobField]) === dob
+    ) || null;
   } else {
-    const { data } = await sbClient.from('patients').select('*').eq('id_no', idNo).eq('dob_g', dob).single();
-    patient = data;
+    try {
+      const { data } = await sbClient.from('patients').select('*').eq('id_no', idNo);
+      if (data && data.length) {
+        patient = data.find(p => normalizeDate(p[dobField]) === dob) || null;
+      }
+    } catch(e) { patient = null; }
   }
 
   document.getElementById('search-btn-text').style.display = 'inline';
@@ -1740,7 +1831,8 @@ function renderPatientDetails(p) {
         <!-- تاريخ الميلاد — centered -->
         <div style="flex:1;text-align:center">
           <div style="font-size:0.62rem;color:rgba(255,255,255,0.55);margin-bottom:2px">تاريخ الميلاد</div>
-          <div style="font-size:0.82rem;color:#fff;font-family:monospace">${p.dob_g}</div>
+          <div style="font-size:0.82rem;color:#fff;font-family:monospace">${p.dob_g || '—'}</div>
+          ${p.dob_h ? `<div style="font-size:0.66rem;color:rgba(255,255,255,0.7);font-family:monospace;margin-top:1px">${p.dob_h} هـ</div>` : ''}
         </div>
         <!-- رقم الجوال — right aligned -->
         <div style="flex:1;text-align:right">
@@ -2154,6 +2246,7 @@ async function saveNewPatient() {
   const fullName = document.getElementById('new-full-name').value.trim();
   const mobile = document.getElementById('new-mobile').value.trim();
   const dob = document.getElementById('new-dob').value;
+  const dobH = document.getElementById('new-dob-h').value;
   const alertEl = document.getElementById('add-patient-alert');
 
   if (!idNo || !fullName || !dob) {
@@ -2169,7 +2262,8 @@ async function saveNewPatient() {
     id_no: idNo,
     full_name: fullName,
     mobile_no: mobile,
-    dob_g: dob,
+    dob_g: dob.trim(),
+    dob_h: dobH.trim(),
     created_at: new Date().toISOString()
   };
 
@@ -2200,6 +2294,7 @@ async function saveNewPatient() {
   document.getElementById('new-full-name').value = '';
   document.getElementById('new-mobile').value = '';
   document.getElementById('new-dob').value = '';
+  document.getElementById('new-dob-h').value = '';
   alertEl.innerHTML = '';
 }
 
@@ -2207,7 +2302,7 @@ function exportPatients() {
   if (!window.XLSX) { showToast('⚠️ خطأ في التصدير'); return; }
   const ws = XLSX.utils.json_to_sheet(state.allPatients.map(p => ({
     'رقم الهوية': p.id_no, 'الاسم الكامل': p.full_name,
-    'رقم الجوال': p.mobile_no || '', 'تاريخ الميلاد': p.dob_g
+    'رقم الجوال': p.mobile_no || '', 'تاريخ الميلاد': p.dob_g, 'التاريخ الهجري': p.dob_h || ''
   })));
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'المرضى');
@@ -2639,7 +2734,7 @@ async function processUpload(file) {
 
   // Parse file
   const reader = new FileReader();
-  reader.onload = (e) => {
+  reader.onload = async (e) => {
     try {
       const wb = XLSX.read(e.target.result, { type: 'binary' });
       const ws = wb.Sheets[wb.SheetNames[0]];
@@ -2647,12 +2742,14 @@ async function processUpload(file) {
 
       let inserted = 0, updated = 0, skipped = 0;
       const errors = [];
+      const toUpsert = [];
 
       rows.forEach((row, idx) => {
         const idNo = String(row['ID_No'] || row['id_no'] || row['رقم الهوية'] || '').trim();
         const fullName = String(row['Full_Name'] || row['full_name'] || row['الاسم الكامل'] || '').trim();
         const mobile = String(row['Mobile_no'] || row['mobile_no'] || row['رقم الجوال'] || '').trim();
         const dob = String(row['DOB_G'] || row['dob_g'] || row['تاريخ الميلاد'] || '').trim();
+        const dobH = String(row['DOB_H'] || row['dob_h'] || row['التاريخ الهجري'] || row['تاريخ الميلاد الهجري'] || '').trim();
 
         if (!idNo || !fullName) { skipped++; errors.push(`صف ${idx + 2}: بيانات ناقصة`); return; }
         if (idNo.length !== 10) { skipped++; errors.push(`صف ${idx + 2}: رقم هوية غير صحيح (${idNo})`); return; }
@@ -2662,20 +2759,33 @@ async function processUpload(file) {
           existing.full_name = fullName;
           existing.mobile_no = mobile;
           existing.dob_g = dob;
+          existing.dob_h = dobH;
           updated++;
         } else {
-          state.allPatients.push({ id: Date.now() + idx, id_no: idNo, full_name: fullName, mobile_no: mobile, dob_g: dob, created_at: new Date().toISOString() });
+          state.allPatients.push({ id: Date.now() + idx, id_no: idNo, full_name: fullName, mobile_no: mobile, dob_g: dob, dob_h: dobH, created_at: new Date().toISOString() });
           inserted++;
         }
+        toUpsert.push({ id_no: idNo, full_name: fullName, mobile_no: mobile, dob_g: dob, dob_h: dobH });
       });
+
+      // كتابة البيانات إلى Supabase
+      let dbError = '';
+      if (sbClient && !DEMO_MODE && toUpsert.length) {
+        try {
+          const { error } = await sbClient
+            .from('patients')
+            .upsert(toUpsert, { onConflict: 'id_no' });
+          if (error) dbError = error.message;
+        } catch(err) { dbError = 'تعذّر الاتصال بقاعدة البيانات'; }
+      }
 
       // Update report
       document.getElementById('rpt-total').textContent = rows.length;
       document.getElementById('rpt-new').textContent = inserted;
       document.getElementById('rpt-upd').textContent = updated;
       document.getElementById('rpt-skip').textContent = skipped;
-      document.getElementById('rpt-errors').innerHTML = errors.length
-        ? `<div class="alert alert-warning"><strong>تحذيرات:</strong><br>${errors.slice(0, 5).join('<br>')}</div>`
+      document.getElementById('rpt-errors').innerHTML = (errors.length || dbError)
+        ? `<div class="alert alert-warning"><strong>تنبيهات:</strong><br>${dbError ? '❌ خطأ في الحفظ بقاعدة البيانات: ' + dbError + '<br>' : ''}${errors.slice(0, 5).join('<br>')}</div>`
         : '';
       document.getElementById('upload-report').style.display = 'block';
 
@@ -2684,11 +2794,11 @@ async function processUpload(file) {
         id: Date.now(), file_name: file.name,
         uploaded_by: state.currentAdminUser?.username || 'admin',
         total_rows: rows.length, inserted_rows: inserted, updated_rows: updated, skipped_rows: skipped,
-        status: 'success', created_at: new Date().toISOString()
+        status: dbError ? 'error' : 'success', created_at: new Date().toISOString()
       });
 
       loadAdminDashboard();
-      showToast(`✅ تم رفع ${rows.length} سجل`);
+      showToast(dbError ? '⚠️ رُفع محلياً لكن فشل الحفظ بالقاعدة' : `✅ تم رفع ${rows.length} سجل`);
     } catch(err) {
       showToast('❌ خطأ في قراءة الملف');
     }
@@ -2699,8 +2809,8 @@ async function processUpload(file) {
 function downloadTemplate() {
   if (!window.XLSX) return;
   const ws = XLSX.utils.aoa_to_sheet([
-    ['ID_No', 'Full_Name', 'Mobile_no', 'DOB_G'],
-    ['1234567890', 'أحمد محمد العسيري', '0501234567', '1990-05-15'],
+    ['ID_No', 'Full_Name', 'Mobile_no', 'DOB_G', 'DOB_H'],
+    ['1234567890', 'أحمد محمد العسيري', '0501234567', '1990/05/15', '1410/11/20'],
   ]);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'نموذج المرضى');
