@@ -2839,9 +2839,9 @@ function renderGroupCurrentMembers() {
   }).join('');
 }
 
+let notifLookupDebounce;
 function lookupPatientForNotif(idNo) {
   const nameEl = document.getElementById('notif-patient-name');
-  const msgEl = document.getElementById('notif-message');
   // تطبيع: إزالة المسافات وتحويل الأرقام العربية إلى إنجليزية
   idNo = String(idNo == null ? '' : idNo)
     .replace(/[\u0660-\u0669]/g, d => d.charCodeAt(0) - 0x0660)
@@ -2849,14 +2849,35 @@ function lookupPatientForNotif(idNo) {
     .replace(/\s+/g, '')
     .trim();
   if (!idNo) { nameEl.textContent = ''; return; }
-  // مقارنة كنص في الطرفين لتفادي اختلاف النوع (رقم/نص)
-  const p = state.allPatients.find(p => String(p.id_no).trim() === idNo);
-  if (p) {
-    nameEl.textContent = '✅ ' + p.full_name;
-    msgEl.value = `عزيزي مراجع مركز صحي الشقيق - ${p.full_name}،\n`;
-  } else {
-    nameEl.textContent = '⚠️ رقم الهوية غير موجود';
-  }
+
+  // أولاً جرّب البحث محلياً (سريع إن كان محمّلاً)
+  const local = state.allPatients.find(p => String(p.id_no).trim() === idNo);
+  if (local) { setNotifPatient(local); return; }
+
+  // لم نجده محلياً: نبحث على الخادم بمجرد اكتمال الرقم (10 خانات)
+  if (idNo.length < 10) { nameEl.textContent = ''; return; }
+  if (!sbClient || DEMO_MODE) { nameEl.textContent = '⚠️ رقم الهوية غير موجود'; return; }
+
+  nameEl.textContent = '⏳ جاري البحث...';
+  clearTimeout(notifLookupDebounce);
+  notifLookupDebounce = setTimeout(async () => {
+    try {
+      const { data, error } = await sbClient
+        .from('patients').select('*').eq('id_no', idNo).limit(1);
+      if (error) throw error;
+      if (data && data.length) setNotifPatient(data[0]);
+      else nameEl.textContent = '⚠️ رقم الهوية غير موجود';
+    } catch (e) {
+      nameEl.textContent = '⚠️ تعذّر التحقق، حاول مرة أخرى';
+    }
+  }, 250);
+}
+
+function setNotifPatient(p) {
+  const nameEl = document.getElementById('notif-patient-name');
+  const msgEl = document.getElementById('notif-message');
+  nameEl.textContent = '✅ ' + p.full_name;
+  msgEl.value = `عزيزي مراجع مركز صحي الشقيق - ${p.full_name}،\n`;
 }
 
 function saveWhatsAppNumber() {
