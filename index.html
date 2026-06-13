@@ -3053,7 +3053,10 @@ function addMemberToGroup(idNo, fullName) {
   if (!g.members.includes(idNo)) g.members.push(idNo);
   persistGroupMembers(g);
   renderGroupCurrentMembers();
-  renderGroupMemberSearch(document.getElementById('group-member-search').value);
+  // تفريغ حقل البحث وإعادة التركيز للبحث التالي
+  const searchEl = document.getElementById('group-member-search');
+  if (searchEl) { searchEl.value = ''; searchEl.focus(); }
+  document.getElementById('group-member-results').innerHTML = '';
   renderGroupsList();
 }
 
