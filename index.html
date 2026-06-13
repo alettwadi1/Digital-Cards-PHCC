@@ -1173,7 +1173,7 @@ input:checked + .slider::before { transform: translateX(20px); }
           </div>
         </div>
         <div class="search-bar">
-          <input type="text" placeholder="البحث برقم الهوية أو الاسم..." id="patient-search-input" oninput="filterPatients(this.value)">
+          <input type="text" placeholder="البحث برقم الهوية..." id="patient-search-input" oninput="filterPatients(this.value)">
           <span class="search-bar-icon">🔍</span>
         </div>
         <div class="table-wrapper">
@@ -2472,39 +2472,45 @@ let patientsSearchQuery = '';
 async function loadPatientsTable() {
   const query = (patientsSearchQuery || '').trim();
 
-  // If Supabase connected, search the WHOLE database on the server for any match
+  // قاعدة كبيرة (+25 ألف): البحث على الخادم برقم الهوية فقط
   if (sbClient && !DEMO_MODE) {
     try {
       let req = sbClient.from('patients').select('*');
       if (query) {
-        // أي تطابق جزئي في الهوية أو الاسم أو الجوال أو التواريخ
-        const like = `%${query}%`;
-        req = req.or(
-          `id_no.ilike.${like},full_name.ilike.${like},mobile_no.ilike.${like},dob_g.ilike.${like},dob_h.ilike.${like}`
-        );
+        // بحث جزئي برقم الهوية (يعمل للأعمدة النصية)
+        req = req.ilike('id_no', `%${query}%`);
       }
-      req = req.order('created_at', { ascending: false }).limit(1000);
+      req = req.order('created_at', { ascending: false }).limit(200);
       const { data, error } = await req;
-      if (!error && data) {
-        if (query) {
-          state.filteredPatients = data;
-        } else {
-          state.allPatients = data;
-          state.filteredPatients = [...data];
-        }
+      if (error) throw error;
+
+      if (query) {
+        state.filteredPatients = data || [];
+      } else {
+        state.allPatients = data || [];
+        state.filteredPatients = [...state.allPatients];
       }
-    } catch(e) {}
+    } catch(e) {
+      // إن كان عمود الهوية رقمياً فلا يقبل ilike: نعيد المحاولة بتطابق تام
+      try {
+        let req2 = sbClient.from('patients').select('*');
+        if (query) req2 = req2.eq('id_no', query);
+        const { data } = await req2.limit(200);
+        if (query) {
+          state.filteredPatients = data || [];
+        } else {
+          state.allPatients = data || [];
+          state.filteredPatients = [...state.allPatients];
+        }
+      } catch(e2) {
+        state.filteredPatients = [];
+      }
+    }
   } else {
-    // وضع بدون اتصال: بحث محلي بأي تطابق
+    // وضع بدون اتصال
     const q = query.toLowerCase();
     state.filteredPatients = q
-      ? state.allPatients.filter(p =>
-          String(p.id_no || '').toLowerCase().includes(q) ||
-          String(p.full_name || '').toLowerCase().includes(q) ||
-          String(p.mobile_no || '').toLowerCase().includes(q) ||
-          String(p.dob_g || '').toLowerCase().includes(q) ||
-          String(p.dob_h || '').toLowerCase().includes(q)
-        )
+      ? state.allPatients.filter(p => String(p.id_no ?? '').toLowerCase().includes(q))
       : [...state.allPatients];
   }
 
