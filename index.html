@@ -1095,7 +1095,10 @@ input:checked + .slider::before { transform: translateX(20px); }
       </button>
       <div class="sidebar-section">الخدمات</div>
       <button class="sidebar-item" onclick="adminNav('notifications', this)">
-        <span class="sidebar-icon">🔔</span> الإشعارات
+        <span class="sidebar-icon">🔔</span> إشعارات داخل التطبيق
+      </button>
+      <button class="sidebar-item admin-only" onclick="adminNav('whatsapp', this)">
+        <span class="sidebar-icon">📱</span> إشعارات واتساب
       </button>
       <button class="sidebar-item admin-only" onclick="adminNav('upload', this)">
         <span class="sidebar-icon">📤</span> رفع بيانات
@@ -1276,11 +1279,17 @@ input:checked + .slider::before { transform: translateX(20px); }
         </div>
       </div>
 
-        <!-- WhatsApp Settings -->
-        <div class="card admin-only" style="margin-top:1.5rem">
+      <!-- WhatsApp Notifications -->
+      <div id="page-whatsapp" class="admin-page">
+        <div class="section-heading">
+          <h2>📱 إشعارات واتساب</h2>
+        </div>
+
+        <!-- Clinic number settings -->
+        <div class="card">
           <div class="card-header">
-            <div class="card-icon" style="background:#E8F5E9">📱</div>
-            <div><div class="card-title">إعدادات واتساب المركز الصحي</div></div>
+            <div class="card-icon" style="background:#E8F5E9">⚙️</div>
+            <div><div class="card-title">إعدادات رقم المركز</div></div>
           </div>
           <div class="form-group">
             <label>رقم واتساب المركز (مثال: 966501234567)</label>
@@ -1288,6 +1297,39 @@ input:checked + .slider::before { transform: translateX(20px); }
           </div>
           <button class="btn btn-secondary" onclick="saveWhatsAppNumber()">💾 حفظ الرقم</button>
           <div id="whatsapp-save-alert" style="margin-top:8px"></div>
+        </div>
+
+        <!-- Send via WhatsApp -->
+        <div class="card" style="margin-top:1.5rem">
+          <div class="card-header">
+            <div class="card-icon" style="background:#FFF8E1">📤</div>
+            <div><div class="card-title">إرسال رسالة واتساب</div></div>
+          </div>
+          <div class="form-group">
+            <label>المستلمون</label>
+            <div class="recipient-selector">
+              <button class="recipient-chip active" onclick="selectWaRecipient('one', this)">رقم محدد</button>
+              <button class="recipient-chip" onclick="selectWaRecipient('group', this)">مجموعة محددة</button>
+            </div>
+          </div>
+          <div class="form-group" id="wa-recipient-id-group">
+            <label>رقم الهوية</label>
+            <input type="text" id="wa-id-no" placeholder="أدخل رقم الهوية" inputmode="numeric" oninput="lookupPatientForWa(this.value)">
+            <div id="wa-patient-name" style="margin-top:6px;font-size:0.85rem;color:var(--primary);font-weight:600;min-height:20px"></div>
+          </div>
+          <div class="form-group" id="wa-recipient-group-group" style="display:none">
+            <label>اختر المجموعة</label>
+            <select id="wa-group-select" onchange="onWaGroupChange()"></select>
+            <div id="wa-group-info" style="margin-top:6px;font-size:0.85rem;color:var(--primary);font-weight:600;min-height:20px"></div>
+          </div>
+          <div class="form-group">
+            <label>نص الرسالة</label>
+            <textarea id="wa-message" rows="4" style="resize:vertical" placeholder="أدخل نص رسالة الواتساب..."></textarea>
+          </div>
+          <div id="wa-send-alert"></div>
+          <button class="btn btn-primary" onclick="sendWhatsappNotification()">
+            🟢 إرسال عبر واتساب
+          </button>
         </div>
       </div>
 
@@ -1608,6 +1650,9 @@ let state = {
   patientsPerPage: 10,
   filteredPatients: [...DEMO_PATIENTS],
   notifRecipient: 'all',
+  waRecipient: 'one',
+  waSelectedGroupId: null,
+  waPatient: null,
   whatsappNumber: localStorage.getItem('clinic_whatsapp') || '',
   groups: JSON.parse(localStorage.getItem('notif_groups') || '[]'),
   selectedGroupId: null,
@@ -2520,9 +2565,13 @@ function adminNav(page, el) {
     // Set default message for "all" recipient
     const msgEl = document.getElementById('notif-message');
     if (msgEl && !msgEl.value) msgEl.value = 'عزيزي مراجع مركز صحي الشقيق،\n';
-    // Populate WhatsApp field
+  }
+  if (page === 'whatsapp') {
     const waEl = document.getElementById('clinic-whatsapp');
     if (waEl) waEl.value = state.whatsappNumber;
+    populateWaGroupSelect();
+    const waMsg = document.getElementById('wa-message');
+    if (waMsg && !waMsg.value) waMsg.value = 'عزيزي مراجع مركز صحي الشقيق،\n';
   }
   if (page === 'dashboard') loadAdminDashboard();
 }
@@ -3176,6 +3225,146 @@ function saveWhatsAppNumber() {
   const alert = document.getElementById('whatsapp-save-alert');
   alert.innerHTML = '<div class="alert alert-success">✅ تم حفظ رقم الواتساب</div>';
   setTimeout(() => alert.innerHTML = '', 3000);
+}
+
+// ══════════════════════════════════════════ WHATSAPP SEND ══
+
+function selectWaRecipient(type, el) {
+  document.querySelectorAll('#page-whatsapp .recipient-chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  state.waRecipient = type;
+  document.getElementById('wa-recipient-id-group').style.display = type === 'one' ? 'block' : 'none';
+  document.getElementById('wa-recipient-group-group').style.display = type === 'group' ? 'block' : 'none';
+  if (type === 'group') populateWaGroupSelect();
+}
+
+let waLookupDebounce;
+function lookupPatientForWa(idNo) {
+  const nameEl = document.getElementById('wa-patient-name');
+  state.waPatient = null;
+  idNo = String(idNo == null ? '' : idNo)
+    .replace(/[\u0660-\u0669]/g, d => d.charCodeAt(0) - 0x0660)
+    .replace(/[\u06F0-\u06F9]/g, d => d.charCodeAt(0) - 0x06F0)
+    .replace(/\s+/g, '')
+    .trim();
+  if (!idNo) { nameEl.textContent = ''; return; }
+
+  const local = state.allPatients.find(p => String(p.id_no).trim() === idNo);
+  if (local) { setWaPatient(local); return; }
+
+  if (idNo.length < 10) { nameEl.textContent = ''; return; }
+  if (!sbClient || DEMO_MODE) { nameEl.textContent = '⚠️ رقم الهوية غير موجود'; return; }
+
+  nameEl.textContent = '⏳ جاري البحث...';
+  clearTimeout(waLookupDebounce);
+  waLookupDebounce = setTimeout(async () => {
+    try {
+      const { data, error } = await sbClient
+        .from('patients').select('*').eq('id_no', idNo).limit(1);
+      if (error) throw error;
+      if (data && data.length) setWaPatient(data[0]);
+      else nameEl.textContent = '⚠️ رقم الهوية غير موجود';
+    } catch (e) {
+      nameEl.textContent = '⚠️ تعذّر التحقق، حاول مرة أخرى';
+    }
+  }, 250);
+}
+
+function setWaPatient(p) {
+  const nameEl = document.getElementById('wa-patient-name');
+  state.waPatient = p;
+  const mob = formatMobile(p.mobile_no);
+  if (!p.mobile_no || mob === '---') {
+    nameEl.innerHTML = `<span style="color:var(--danger)">⚠️ ${p.full_name} — لا يوجد رقم جوال</span>`;
+  } else {
+    nameEl.textContent = `✅ ${p.full_name} — ${mob}`;
+  }
+}
+
+function populateWaGroupSelect() {
+  const sel = document.getElementById('wa-group-select');
+  if (!sel) return;
+  if (!state.groups.length) {
+    sel.innerHTML = '<option value="">لا توجد مجموعات — أنشئ مجموعة أولاً</option>';
+    document.getElementById('wa-group-info').textContent = '';
+    state.waSelectedGroupId = null;
+    return;
+  }
+  sel.innerHTML = '<option value="">— اختر مجموعة —</option>' +
+    state.groups.map(g => `<option value="${g.id}">${g.name} (${g.members.length})</option>`).join('');
+  onWaGroupChange();
+}
+
+function onWaGroupChange() {
+  const sel = document.getElementById('wa-group-select');
+  const info = document.getElementById('wa-group-info');
+  state.waSelectedGroupId = sel.value || null;
+  const g = state.groups.find(x => String(x.id) === String(sel.value));
+  info.textContent = g ? `✅ ${g.members.length} مراجع في هذه المجموعة` : '';
+}
+
+async function sendWhatsappNotification() {
+  if (state.isStaff) { showToast('❌ لا تملك صلاحية الإرسال'); return; }
+  const alertEl = document.getElementById('wa-send-alert');
+  const message = document.getElementById('wa-message').value.trim();
+  if (!message) {
+    alertEl.innerHTML = `<div class="alert alert-error">⚠️ يرجى كتابة نص الرسالة</div>`;
+    return;
+  }
+
+  // اجمع أرقام الجوال المستهدفة بصيغة wa.me
+  let numbers = [];
+
+  if (state.waRecipient === 'one') {
+    const p = state.waPatient;
+    if (!p) { alertEl.innerHTML = `<div class="alert alert-error">⚠️ ابحث عن المراجع برقم الهوية أولاً</div>`; return; }
+    const mob = formatMobile(p.mobile_no);
+    if (!p.mobile_no || mob === '---') { alertEl.innerHTML = `<div class="alert alert-error">⚠️ المراجع لا يملك رقم جوال مسجّل</div>`; return; }
+    numbers = [mob];
+  } else {
+    // مجموعة أرقام
+    const g = state.groups.find(x => String(x.id) === String(state.waSelectedGroupId));
+    if (!g) { alertEl.innerHTML = `<div class="alert alert-error">⚠️ اختر مجموعة أولاً</div>`; return; }
+    if (!g.members.length) { alertEl.innerHTML = `<div class="alert alert-error">⚠️ المجموعة لا تحتوي على أعضاء</div>`; return; }
+
+    alertEl.innerHTML = `<div class="alert alert-info">⏳ جاري جلب أرقام الأعضاء...</div>`;
+    let patients = [];
+    if (sbClient && !DEMO_MODE) {
+      try {
+        const { data } = await sbClient.from('patients')
+          .select('id_no, full_name, mobile_no').in('id_no', g.members.map(String));
+        patients = data || [];
+      } catch (e) { /* fallback to local */ }
+    }
+    if (!patients.length) {
+      patients = state.allPatients.filter(p => g.members.map(String).includes(String(p.id_no)));
+    }
+    numbers = patients.map(p => formatMobile(p.mobile_no)).filter(m => m && m !== '---');
+    if (!numbers.length) { alertEl.innerHTML = `<div class="alert alert-error">⚠️ لا يوجد أعضاء لديهم أرقام جوال مسجّلة</div>`; return; }
+  }
+
+  const encoded = encodeURIComponent(message);
+
+  if (numbers.length === 1) {
+    window.open(`https://wa.me/${numbers[0]}?text=${encoded}`, '_blank');
+    alertEl.innerHTML = `<div class="alert alert-success">✅ تم فتح واتساب للإرسال</div>`;
+    return;
+  }
+
+  // مجموعة: نعرض روابط منفصلة لكل رقم (واتساب لا يدعم إرسال جماعي عبر wa.me)
+  alertEl.innerHTML = `
+    <div class="alert alert-info">
+      📋 جاهز للإرسال إلى <strong>${numbers.length}</strong> رقم. اضغط على كل رابط لفتح المحادثة وإرسال الرسالة:
+    </div>
+    <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px;max-height:260px;overflow-y:auto">
+      ${numbers.map((n, i) => `
+        <a href="https://wa.me/${n}?text=${encoded}" target="_blank"
+           style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;text-decoration:none;color:var(--primary);font-weight:600">
+          <span>🟢 إرسال إلى الرقم ${i + 1}</span>
+          <span style="font-family:monospace;font-size:0.8rem;color:var(--text-secondary)">${n}</span>
+        </a>
+      `).join('')}
+    </div>`;
 }
 
 async function sendNotification() {
