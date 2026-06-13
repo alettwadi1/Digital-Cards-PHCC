@@ -2572,7 +2572,7 @@ function adminNav(page, el) {
     if (waEl) waEl.value = state.whatsappNumber;
     populateWaGroupSelect();
     const waMsg = document.getElementById('wa-message');
-    if (waMsg && !waMsg.value) waMsg.value = 'عزيزي مراجع مركز صحي الشقيق،\n';
+    if (waMsg && !waMsg.value) waMsg.value = 'عزيزي مراجع مركز صحي الشقيق {name}،\n';
   }
   if (page === 'dashboard') loadAdminDashboard();
 }
