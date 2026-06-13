@@ -1546,7 +1546,7 @@ input:checked + .slider::before { transform: translateX(20px); }
     </div>
     <div class="form-group">
       <label>إضافة مراجع للمجموعة</label>
-      <input type="text" id="group-member-search" placeholder="ابحث بالاسم أو رقم الهوية..." oninput="renderGroupMemberSearch(this.value)">
+      <input type="text" id="group-member-search" placeholder="ابحث برقم الهوية..." inputmode="numeric" oninput="renderGroupMemberSearch(this.value)">
     </div>
     <div id="group-member-results" style="max-height:200px;overflow-y:auto;margin-bottom:1rem"></div>
     <label style="font-size:0.85rem;color:var(--text-secondary)">الأعضاء الحاليون</label>
@@ -2979,29 +2979,55 @@ function openGroupMembers(id) {
   openModal('group-members-modal');
 }
 
+let groupMemberSearchDebounce;
 function renderGroupMemberSearch(query) {
   const el = document.getElementById('group-member-results');
   query = String(query || '')
     .replace(/[\u0660-\u0669]/g, d => d.charCodeAt(0) - 0x0660)
     .replace(/[\u06F0-\u06F9]/g, d => d.charCodeAt(0) - 0x06F0)
+    .replace(/\s+/g, '')
     .trim();
   if (!query) { el.innerHTML = ''; return; }
   const g = state.groups.find(x => String(x.id) === String(activeGroupId));
-  const q = query.toLowerCase();
-  const matches = state.allPatients.filter(p =>
-    (String(p.id_no).includes(query) || (p.full_name || '').toLowerCase().includes(q)) &&
-    !g.members.includes(String(p.id_no))
-  ).slice(0, 8);
-  if (!matches.length) { el.innerHTML = `<div style="font-size:0.82rem;color:var(--text-secondary);padding:6px">لا نتائج</div>`; return; }
-  el.innerHTML = matches.map(p => `
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;border-bottom:1px solid var(--border)">
-      <div style="min-width:0">
-        <div style="font-weight:600;font-size:0.88rem">${p.full_name}</div>
-        <div style="font-size:0.76rem;color:var(--text-secondary)">${p.id_no}</div>
+  if (!g) { el.innerHTML = ''; return; }
+
+  const render = (list) => {
+    const matches = list.filter(p => !g.members.includes(String(p.id_no))).slice(0, 12);
+    if (!matches.length) { el.innerHTML = `<div style="font-size:0.82rem;color:var(--text-secondary);padding:6px">لا نتائج</div>`; return; }
+    el.innerHTML = matches.map(p => `
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;border-bottom:1px solid var(--border)">
+        <div style="min-width:0">
+          <div style="font-weight:600;font-size:0.88rem">${p.full_name || '---'}</div>
+          <div style="font-size:0.76rem;color:var(--text-secondary)">${p.id_no}</div>
+        </div>
+        <button class="btn btn-primary" style="width:auto;padding:6px 14px;font-size:0.9rem;flex-shrink:0" onclick="addMemberToGroup('${p.id_no}')">➕</button>
       </div>
-      <button class="btn btn-primary" style="width:auto;padding:6px 14px;font-size:0.9rem;flex-shrink:0" onclick="addMemberToGroup('${p.id_no}')">➕</button>
-    </div>
-  `).join('');
+    `).join('');
+  };
+
+  // بحث محلي سريع أولاً (إن وُجد)
+  const local = state.allPatients.filter(p => String(p.id_no).includes(query));
+  if (local.length) { render(local); }
+
+  // بحث على الخادم برقم الهوية (للقاعدة الكبيرة)
+  if (!sbClient || DEMO_MODE) { if (!local.length) render([]); return; }
+  if (!local.length) el.innerHTML = `<div style="font-size:0.82rem;color:var(--text-secondary);padding:6px">⏳ جاري البحث...</div>`;
+
+  clearTimeout(groupMemberSearchDebounce);
+  groupMemberSearchDebounce = setTimeout(async () => {
+    try {
+      let req = sbClient.from('patients').select('*').ilike('id_no', `%${query}%`).limit(20);
+      let { data, error } = await req;
+      if (error) {
+        // عمود رقمي لا يقبل ilike: تطابق تام
+        const r2 = await sbClient.from('patients').select('*').eq('id_no', query).limit(20);
+        data = r2.data || [];
+      }
+      render(data || []);
+    } catch (e) {
+      if (!local.length) el.innerHTML = `<div style="font-size:0.82rem;color:var(--danger);padding:6px">تعذّر البحث، حاول مرة أخرى</div>`;
+    }
+  }, 250);
 }
 
 function addMemberToGroup(idNo) {
