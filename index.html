@@ -998,7 +998,7 @@ input:checked + .slider::before { transform: translateX(20px); }
           <span id="search-btn-text">🔍 بحث عن بيانات المراجع</span>
           <span id="search-spinner" style="display:none"><span class="loading-spinner loading-spinner-dark"></span></span>
         </button>
-        <button class="btn btn-outline" id="register-request-btn" onclick="openRegisterRequestModal()" style="display:none;margin-top:10px;width:100%;background:rgba(255,255,255,0.12);color:#fff;border:1.5px solid rgba(255,255,255,0.5)">
+        <button class="btn" id="register-request-btn" onclick="openRegisterRequestModal()" style="display:none;margin-top:10px;width:100%;background:#FFD400;color:#000;border:1.5px solid #E6BF00;font-weight:700">
           📝 طلب تسجيل
         </button>
       </div>
@@ -1382,10 +1382,11 @@ input:checked + .slider::before { transform: translateX(20px); }
                 <th>رقم الجوال</th>
                 <th>تاريخ الميلاد</th>
                 <th>التاريخ</th>
+                <th>إجراءات</th>
               </tr>
             </thead>
             <tbody id="regrequests-table-body">
-              <tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:2rem">لا توجد طلبات</td></tr>
+              <tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:2rem">لا توجد طلبات</td></tr>
             </tbody>
           </table>
         </div>
@@ -1931,7 +1932,7 @@ async function submitRegisterRequest() {
 
 async function loadRegRequestsTable() {
   const tbody = document.getElementById('regrequests-table-body');
-  tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:1.5rem"><span class="loading-spinner"></span> جاري التحميل...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:1.5rem"><span class="loading-spinner"></span> جاري التحميل...</td></tr>';
 
   let rows = [];
   if (sbClient && !DEMO_MODE) {
@@ -1943,7 +1944,7 @@ async function loadRegRequestsTable() {
       if (error) throw error;
       rows = data || [];
     } catch (e) {
-      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--danger);padding:1.5rem">تعذّر تحميل الطلبات</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--danger);padding:1.5rem">تعذّر تحميل الطلبات</td></tr>';
       return;
     }
   }
@@ -1955,7 +1956,7 @@ async function loadRegRequestsTable() {
   }
 
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:2rem">لا توجد طلبات</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:2rem">لا توجد طلبات</td></tr>';
     return;
   }
 
@@ -1971,8 +1972,27 @@ async function loadRegRequestsTable() {
       <td dir="ltr" style="text-align:right">${r.mobile || '-'}</td>
       <td>${dob}</td>
       <td>${formatDate(r.created_at)}</td>
+      <td><button class="btn btn-sm" style="background:var(--danger);color:#fff" onclick="deleteRegRequest('${r.id}', this)">🗑️ حذف</button></td>
     </tr>`;
   }).join('');
+}
+
+async function deleteRegRequest(id, btn) {
+  if (!id) return;
+  if (!confirm('هل تريد حذف هذا الطلب نهائياً؟')) return;
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="loading-spinner"></span>'; }
+  if (sbClient && !DEMO_MODE) {
+    try {
+      const { error } = await sbClient.from('registration_requests').delete().eq('id', id);
+      if (error) throw error;
+    } catch (e) {
+      if (btn) { btn.disabled = false; btn.innerHTML = '🗑️ حذف'; }
+      showToast('❌ تعذّر حذف الطلب');
+      return;
+    }
+  }
+  showToast('✅ تم حذف الطلب');
+  loadRegRequestsTable();
 }
 function normalizeDate(val) {
   if (val == null) return '';
@@ -2450,26 +2470,43 @@ async function loadAdminDashboard() {
 let patientsSearchQuery = '';
 
 async function loadPatientsTable() {
-  // If Supabase connected, fetch fresh data
+  const query = (patientsSearchQuery || '').trim();
+
+  // If Supabase connected, search the WHOLE database on the server for any match
   if (sbClient && !DEMO_MODE) {
     try {
-      const { data, error } = await sbClient
-        .from('patients')
-        .select('*')
-        .order('created_at', { ascending: false });
+      let req = sbClient.from('patients').select('*');
+      if (query) {
+        // أي تطابق جزئي في الهوية أو الاسم أو الجوال أو التواريخ
+        const like = `%${query}%`;
+        req = req.or(
+          `id_no.ilike.${like},full_name.ilike.${like},mobile_no.ilike.${like},dob_g.ilike.${like},dob_h.ilike.${like}`
+        );
+      }
+      req = req.order('created_at', { ascending: false }).limit(1000);
+      const { data, error } = await req;
       if (!error && data) {
-        state.allPatients = data;
-        state.filteredPatients = [...data];
+        if (query) {
+          state.filteredPatients = data;
+        } else {
+          state.allPatients = data;
+          state.filteredPatients = [...data];
+        }
       }
     } catch(e) {}
+  } else {
+    // وضع بدون اتصال: بحث محلي بأي تطابق
+    const q = query.toLowerCase();
+    state.filteredPatients = q
+      ? state.allPatients.filter(p =>
+          String(p.id_no || '').toLowerCase().includes(q) ||
+          String(p.full_name || '').toLowerCase().includes(q) ||
+          String(p.mobile_no || '').toLowerCase().includes(q) ||
+          String(p.dob_g || '').toLowerCase().includes(q) ||
+          String(p.dob_h || '').toLowerCase().includes(q)
+        )
+      : [...state.allPatients];
   }
-
-  const query = patientsSearchQuery.toLowerCase();
-  state.filteredPatients = query
-    ? state.allPatients.filter(p =>
-        p.id_no.includes(query) || p.full_name.toLowerCase().includes(query)
-      )
-    : [...state.allPatients];
 
   const start = (state.patientsPage - 1) * state.patientsPerPage;
   const page = state.filteredPatients.slice(start, start + state.patientsPerPage);
@@ -2492,10 +2529,12 @@ async function loadPatientsTable() {
   renderPagination();
 }
 
+let patientsSearchDebounce;
 function filterPatients(q) {
   patientsSearchQuery = q;
   state.patientsPage = 1;
-  loadPatientsTable();
+  clearTimeout(patientsSearchDebounce);
+  patientsSearchDebounce = setTimeout(loadPatientsTable, 250);
 }
 
 function renderPagination() {
