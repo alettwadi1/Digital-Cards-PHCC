@@ -918,8 +918,8 @@ input:checked + .slider::before { transform: translateX(20px); }
     </div>
     <div id="login-alert"></div>
     <div class="form-group">
-      <label>اسم المستخدم</label>
-      <input type="text" id="admin-username" placeholder="أدخل اسم المستخدم" autocomplete="username">
+      <label>البريد الإلكتروني</label>
+      <input type="email" id="admin-username" placeholder="أدخل البريد الإلكتروني" autocomplete="username">
     </div>
     <div class="form-group">
       <label>كلمة المرور</label>
@@ -997,6 +997,9 @@ input:checked + .slider::before { transform: translateX(20px); }
         <button class="btn btn-white" onclick="searchPatient()" id="search-btn">
           <span id="search-btn-text">🔍 بحث عن بيانات المراجع</span>
           <span id="search-spinner" style="display:none"><span class="loading-spinner loading-spinner-dark"></span></span>
+        </button>
+        <button class="btn btn-outline" id="register-request-btn" onclick="openRegisterRequestModal()" style="display:none;margin-top:10px;width:100%;background:rgba(255,255,255,0.12);color:#fff;border:1.5px solid rgba(255,255,255,0.5)">
+          📝 طلب تسجيل
         </button>
       </div>
     </div>
@@ -1098,6 +1101,9 @@ input:checked + .slider::before { transform: translateX(20px); }
       </button>
       <button class="sidebar-item" onclick="adminNav('history', this)">
         <span class="sidebar-icon">📋</span> سجل الرفع
+      </button>
+      <button class="sidebar-item" onclick="adminNav('regrequests', this)">
+        <span class="sidebar-icon">📝</span> طلبات التسجيل <span id="regreq-badge" style="display:none;background:var(--danger);color:#fff;font-size:0.65rem;padding:1px 6px;border-radius:10px;margin-right:4px"></span>
       </button>
     </div>
 
@@ -1360,6 +1366,31 @@ input:checked + .slider::before { transform: translateX(20px); }
         </div>
       </div>
 
+      <!-- Registration Requests Admin -->
+      <div id="page-regrequests" class="admin-page">
+        <div class="section-heading">
+          <h2>📝 طلبات التسجيل</h2>
+          <button class="btn btn-sm btn-secondary" onclick="loadRegRequestsTable()">🔄 تحديث</button>
+        </div>
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>رقم الهوية / الإقامة</th>
+                <th>الاسم الرباعي</th>
+                <th>رقم الجوال</th>
+                <th>تاريخ الميلاد</th>
+                <th>التاريخ</th>
+              </tr>
+            </thead>
+            <tbody id="regrequests-table-body">
+              <tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:2rem">لا توجد طلبات</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
     </div>
   </div>
 </div>
@@ -1425,6 +1456,41 @@ input:checked + .slider::before { transform: translateX(20px); }
     <div style="display:flex;gap:10px;margin-top:1rem">
       <button class="btn btn-primary" onclick="saveNewPatient()" style="flex:1">💾 حفظ</button>
       <button class="btn btn-outline" onclick="closeModal('add-patient-modal')" style="flex:1">إلغاء</button>
+    </div>
+  </div>
+</div>
+
+<!-- Registration Request Modal -->
+<div class="modal-overlay" id="register-request-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">📝 بيانات مراجع جديد</div>
+      <button class="modal-close" onclick="closeModal('register-request-modal')">✕</button>
+    </div>
+    <div class="form-group">
+      <label>رقم الهوية أو الإقامة *</label>
+      <input type="text" id="reg-id-no" placeholder="10XXXXXXXXX" maxlength="10">
+    </div>
+    <div class="form-group">
+      <label>الاسم الرباعي *</label>
+      <input type="text" id="reg-full-name" placeholder="الاسم الأول، الأب، الجد، العائلة">
+    </div>
+    <div class="form-group">
+      <label>رقم الجوال *</label>
+      <input type="text" id="reg-mobile" dir="ltr" inputmode="numeric" placeholder="05XXXXXXXX" style="text-align:right">
+    </div>
+    <div class="form-group">
+      <label>نوع تاريخ الميلاد *</label>
+      <div class="cal-toggle" style="display:flex;gap:6px;margin-bottom:8px">
+        <button type="button" id="reg-cal-g-btn" class="cal-chip active" onclick="setRegCalType('g')">ميلادي</button>
+        <button type="button" id="reg-cal-h-btn" class="cal-chip" onclick="setRegCalType('h')">هجري</button>
+      </div>
+      <input type="text" id="reg-dob" dir="ltr" inputmode="numeric" placeholder="مثال: 1990/05/15" style="text-align:right" oninput="autoFormatDateInput(this)">
+    </div>
+    <div id="reg-request-alert"></div>
+    <div style="display:flex;gap:10px;margin-top:1rem">
+      <button class="btn btn-primary" onclick="submitRegisterRequest()" style="flex:1">📤 إرسال البيانات</button>
+      <button class="btn btn-outline" onclick="closeModal('register-request-modal')" style="flex:1">↩️ العودة</button>
     </div>
   </div>
 </div>
@@ -1727,7 +1793,120 @@ function setCalType(type) {
   inp.value = '';
 }
 
-// تطبيع التاريخ: أرقام إنجليزية، فواصل موحّدة (/)، إزالة الأصفار البادئة من الشهر/اليوم
+// ══════════════════════════════════════════ REGISTRATION REQUESTS ══
+
+let regCalType = 'g';
+function setRegCalType(type) {
+  regCalType = type;
+  document.getElementById('reg-cal-g-btn').classList.toggle('active', type === 'g');
+  document.getElementById('reg-cal-h-btn').classList.toggle('active', type === 'h');
+  const inp = document.getElementById('reg-dob');
+  inp.placeholder = type === 'g' ? 'مثال: 1990/05/15' : 'مثال: 1411/11/20';
+}
+
+function openRegisterRequestModal() {
+  // تعبئة رقم الهوية مسبقاً من حقل البحث إن وُجد
+  const searchId = document.getElementById('search-id').value.trim();
+  document.getElementById('reg-id-no').value = searchId || '';
+  document.getElementById('reg-full-name').value = '';
+  document.getElementById('reg-mobile').value = '';
+  document.getElementById('reg-dob').value = '';
+  document.getElementById('reg-request-alert').innerHTML = '';
+  setRegCalType('g');
+  openModal('register-request-modal');
+}
+
+async function submitRegisterRequest() {
+  const alertEl = document.getElementById('reg-request-alert');
+  alertEl.innerHTML = '';
+  const idNo = document.getElementById('reg-id-no').value.trim();
+  const fullName = document.getElementById('reg-full-name').value.trim();
+  const mobile = document.getElementById('reg-mobile').value.trim();
+  const dobRaw = document.getElementById('reg-dob').value;
+  const dob = normalizeDate(dobRaw);
+
+  if (!idNo || !fullName || !mobile || !dobRaw.trim()) {
+    alertEl.innerHTML = `<div class="alert alert-error">⚠️ يرجى تعبئة جميع الحقول المطلوبة</div>`;
+    return;
+  }
+  if (idNo.length !== 10 || !/^\d{10}$/.test(idNo)) {
+    alertEl.innerHTML = `<div class="alert alert-error">⚠️ رقم الهوية / الإقامة يجب أن يكون 10 أرقام</div>`;
+    return;
+  }
+
+  const record = {
+    id_no: idNo,
+    full_name: fullName,
+    mobile: mobile,
+    dob_type: regCalType === 'h' ? 'hijri' : 'gregorian',
+    dob_g: regCalType === 'g' ? dob : null,
+    dob_h: regCalType === 'h' ? dob : null,
+    status: 'pending',
+    created_at: new Date().toISOString()
+  };
+
+  if (sbClient && !DEMO_MODE) {
+    try {
+      const { error } = await sbClient.from('registration_requests').insert([record]);
+      if (error) throw error;
+    } catch (e) {
+      alertEl.innerHTML = `<div class="alert alert-error">❌ تعذّر إرسال الطلب. حاول مرة أخرى.</div>`;
+      return;
+    }
+  }
+
+  closeModal('register-request-modal');
+  showToast('✅ تم إرسال طلب التسجيل بنجاح');
+  const rbtn = document.getElementById('register-request-btn');
+  if (rbtn) rbtn.style.display = 'none';
+  document.getElementById('search-alert').innerHTML =
+    `<div class="alert alert-success">✅ تم استلام طلب التسجيل. سيتم التواصل معك قريباً.</div>`;
+}
+
+async function loadRegRequestsTable() {
+  const tbody = document.getElementById('regrequests-table-body');
+  tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:1.5rem"><span class="loading-spinner"></span> جاري التحميل...</td></tr>';
+
+  let rows = [];
+  if (sbClient && !DEMO_MODE) {
+    try {
+      const { data, error } = await sbClient
+        .from('registration_requests')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      rows = data || [];
+    } catch (e) {
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--danger);padding:1.5rem">تعذّر تحميل الطلبات</td></tr>';
+      return;
+    }
+  }
+
+  const badge = document.getElementById('regreq-badge');
+  if (badge) {
+    if (rows.length) { badge.style.display = 'inline-block'; badge.textContent = rows.length; }
+    else badge.style.display = 'none';
+  }
+
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:2rem">لا توجد طلبات</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = rows.map((r, i) => {
+    const dob = r.dob_type === 'hijri'
+      ? `${r.dob_h || '-'} <span style="color:var(--text-muted);font-size:0.7rem">(هجري)</span>`
+      : `${r.dob_g || '-'} <span style="color:var(--text-muted);font-size:0.7rem">(ميلادي)</span>`;
+    return `<tr>
+      <td>${i + 1}</td>
+      <td>${r.id_no || '-'}</td>
+      <td>${r.full_name || '-'}</td>
+      <td dir="ltr" style="text-align:right">${r.mobile || '-'}</td>
+      <td>${dob}</td>
+      <td>${formatDate(r.created_at)}</td>
+    </tr>`;
+  }).join('');
+}
 function normalizeDate(val) {
   if (val == null) return '';
   let s = String(val)
@@ -1766,6 +1945,8 @@ async function searchPatient() {
   const dob = normalizeDate(dobRaw);
   const alertEl = document.getElementById('search-alert');
   alertEl.innerHTML = '';
+  const _rbtn = document.getElementById('register-request-btn');
+  if (_rbtn) _rbtn.style.display = 'none';
 
   if (!idNo || !dobRaw.trim()) {
     alertEl.innerHTML = `<div class="alert alert-error">⚠️ يرجى إدخال رقم الهوية وتاريخ الميلاد</div>`;
@@ -1821,6 +2002,8 @@ async function searchPatient() {
     showToast('✅ تم العثور على بياناتك');
   } else {
     alertEl.innerHTML = `<div class="alert alert-error">❌ لم يتم العثور على المراجع. تأكد من صحة رقم الهوية وتاريخ الميلاد.</div>`;
+    const rbtn = document.getElementById('register-request-btn');
+    if (rbtn) rbtn.style.display = 'block';
   }
 }
 
@@ -2053,37 +2236,54 @@ function showLoginScreen() { showScreen('login-screen'); }
 function showPatientApp() { showScreen('patient-screen'); }
 
 async function adminLogin() {
-  const username = document.getElementById('admin-username').value.trim();
+  const email = document.getElementById('admin-username').value.trim();
   const password = document.getElementById('admin-password').value;
   const alertEl = document.getElementById('login-alert');
   const btn = document.getElementById('login-btn');
 
-  if (!username || !password) {
-    alertEl.innerHTML = `<div class="alert alert-error">⚠️ يرجى إدخال اسم المستخدم وكلمة المرور</div>`;
+  if (!email || !password) {
+    alertEl.innerHTML = `<div class="alert alert-error">⚠️ يرجى إدخال البريد الإلكتروني وكلمة المرور</div>`;
     return;
   }
 
+  alertEl.innerHTML = '';
   btn.disabled = true;
   btn.innerHTML = '<span class="loading-spinner"></span>';
 
-  await new Promise(r => setTimeout(r, 1000));
+  try {
+    const { data, error } = await sbClient.auth.signInWithPassword({ email, password });
 
-  // Demo: any credentials work
-  if (DEMO_MODE || (username === 'admin' && password === 'admin123')) {
-    state.currentAdminUser = { username, role: 'admin' };
-    document.getElementById('admin-name-display').textContent = username;
+    if (error) {
+      alertEl.innerHTML = `<div class="alert alert-error">❌ بيانات الدخول غير صحيحة</div>`;
+      btn.disabled = false;
+      btn.innerHTML = '<span>تسجيل الدخول</span>';
+      return;
+    }
+
+    // التأكد من أن الحساب هو حساب الأدمن الوحيد المصرّح له
+    if (!data.user || data.user.email !== 'alettwadi@gmail.com') {
+      await sbClient.auth.signOut();
+      alertEl.innerHTML = `<div class="alert alert-error">❌ هذا الحساب غير مصرّح له بالدخول</div>`;
+      btn.disabled = false;
+      btn.innerHTML = '<span>تسجيل الدخول</span>';
+      return;
+    }
+
+    state.currentAdminUser = { email: data.user.email, role: 'admin' };
+    document.getElementById('admin-name-display').textContent = data.user.email;
     showScreen('admin-screen');
     loadAdminDashboard();
-    showToast('✅ مرحباً، ' + username);
-  } else {
-    alertEl.innerHTML = `<div class="alert alert-error">❌ بيانات الدخول غير صحيحة</div>`;
+    showToast('✅ مرحباً، ' + data.user.email);
+  } catch (e) {
+    alertEl.innerHTML = `<div class="alert alert-error">❌ تعذّر الاتصال بالخادم، حاول مرة أخرى</div>`;
   }
 
   btn.disabled = false;
   btn.innerHTML = '<span>تسجيل الدخول</span>';
 }
 
-function adminLogout() {
+async function adminLogout() {
+  try { await sbClient.auth.signOut(); } catch (e) {}
   state.currentAdminUser = null;
   showScreen('patient-screen');
   showToast('تم تسجيل الخروج');
@@ -2098,6 +2298,7 @@ function adminNav(page, el) {
   document.getElementById('page-' + page).classList.add('active');
   if (page === 'patients') loadPatientsTable();
   if (page === 'history') loadHistoryTable();
+  if (page === 'regrequests') loadRegRequestsTable();
   if (page === 'notifications') {
     loadSentNotifications();
     renderGroupsList();
