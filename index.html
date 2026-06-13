@@ -1370,7 +1370,10 @@ input:checked + .slider::before { transform: translateX(20px); }
       <div id="page-regrequests" class="admin-page">
         <div class="section-heading">
           <h2>📝 طلبات التسجيل</h2>
-          <button class="btn btn-sm btn-secondary" onclick="loadRegRequestsTable()">🔄 تحديث</button>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-sm btn-secondary" onclick="exportRegRequests()">📊 تصدير Excel</button>
+            <button class="btn btn-sm btn-secondary" onclick="loadRegRequestsTable()">🔄 تحديث</button>
+          </div>
         </div>
         <div class="table-wrapper">
           <table>
@@ -2734,6 +2737,39 @@ function exportPatients() {
   XLSX.utils.book_append_sheet(wb, ws, 'المرضى');
   XLSX.writeFile(wb, 'patients_export.xlsx');
   showToast('✅ تم تصدير البيانات');
+}
+
+async function exportRegRequests() {
+  if (!window.XLSX) { showToast('⚠️ خطأ في التصدير'); return; }
+  // اجلب أحدث الطلبات من قاعدة البيانات
+  let rows = [];
+  if (sbClient && !DEMO_MODE) {
+    try {
+      const { data, error } = await sbClient
+        .from('registration_requests')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      rows = data || [];
+    } catch (e) {
+      showToast('❌ تعذّر جلب الطلبات للتصدير');
+      return;
+    }
+  }
+  if (!rows.length) { showToast('لا توجد طلبات للتصدير'); return; }
+
+  // نفس أسماء الأعمدة التي تتعرّف عليها ميزة الرفع، حتى يُرفع الملف مباشرة
+  const ws = XLSX.utils.json_to_sheet(rows.map(r => ({
+    'رقم الهوية': r.id_no || '',
+    'الاسم الكامل': r.full_name || '',
+    'رقم الجوال': r.mobile || '',
+    'تاريخ الميلاد': r.dob_g || '',
+    'التاريخ الهجري': r.dob_h || ''
+  })));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'طلبات التسجيل');
+  XLSX.writeFile(wb, 'registration_requests.xlsx');
+  showToast('✅ تم تصدير طلبات التسجيل');
 }
 
 // ══════════════════════════════════════════ NOTIFICATIONS ADMIN ══
