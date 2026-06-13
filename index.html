@@ -1325,6 +1325,7 @@ input:checked + .slider::before { transform: translateX(20px); }
           <div class="form-group">
             <label>نص الرسالة</label>
             <textarea id="wa-message" rows="4" style="resize:vertical" placeholder="أدخل نص رسالة الواتساب..."></textarea>
+            <div style="font-size:0.72rem;color:var(--text-muted);margin-top:4px">💡 اكتب <code>{name}</code> في أي مكان ليُستبدل تلقائياً باسم صاحب الرقم في الإرسال الجماعي</div>
           </div>
           <div id="wa-send-alert"></div>
           <button class="btn btn-primary" onclick="sendWhatsappNotification()">
@@ -3312,15 +3313,15 @@ async function sendWhatsappNotification() {
     return;
   }
 
-  // اجمع أرقام الجوال المستهدفة بصيغة wa.me
-  let numbers = [];
+  // اجمع المستلمين: لكل واحد رقم واسم
+  let targets = []; // { mob, name }
 
   if (state.waRecipient === 'one') {
     const p = state.waPatient;
     if (!p) { alertEl.innerHTML = `<div class="alert alert-error">⚠️ ابحث عن المراجع برقم الهوية أولاً</div>`; return; }
     const mob = formatMobile(p.mobile_no);
     if (!p.mobile_no || mob === '---') { alertEl.innerHTML = `<div class="alert alert-error">⚠️ المراجع لا يملك رقم جوال مسجّل</div>`; return; }
-    numbers = [mob];
+    targets = [{ mob, name: p.full_name || '' }];
   } else {
     // مجموعة أرقام
     const g = state.groups.find(x => String(x.id) === String(state.waSelectedGroupId));
@@ -3339,29 +3340,34 @@ async function sendWhatsappNotification() {
     if (!patients.length) {
       patients = state.allPatients.filter(p => g.members.map(String).includes(String(p.id_no)));
     }
-    numbers = patients.map(p => formatMobile(p.mobile_no)).filter(m => m && m !== '---');
-    if (!numbers.length) { alertEl.innerHTML = `<div class="alert alert-error">⚠️ لا يوجد أعضاء لديهم أرقام جوال مسجّلة</div>`; return; }
+    targets = patients
+      .map(p => ({ mob: formatMobile(p.mobile_no), name: p.full_name || '' }))
+      .filter(t => t.mob && t.mob !== '---');
+    if (!targets.length) { alertEl.innerHTML = `<div class="alert alert-error">⚠️ لا يوجد أعضاء لديهم أرقام جوال مسجّلة</div>`; return; }
   }
 
-  const encoded = encodeURIComponent(message);
+  // استبدال {name} باسم كل مستلم
+  const personalize = (name) => message.replace(/\{name\}/g, name || '');
 
-  if (numbers.length === 1) {
-    window.open(`https://wa.me/${numbers[0]}?text=${encoded}`, '_blank');
+  if (targets.length === 1) {
+    const t = targets[0];
+    window.open(`https://wa.me/${t.mob}?text=${encodeURIComponent(personalize(t.name))}`, '_blank');
     alertEl.innerHTML = `<div class="alert alert-success">✅ تم فتح واتساب للإرسال</div>`;
     return;
   }
 
-  // مجموعة: نعرض روابط منفصلة لكل رقم (واتساب لا يدعم إرسال جماعي عبر wa.me)
+  // مجموعة: رابط منفصل لكل عضو برسالة باسمه (واتساب لا يدعم الإرسال الجماعي عبر wa.me)
+  const usesName = /\{name\}/.test(message);
   alertEl.innerHTML = `
     <div class="alert alert-info">
-      📋 جاهز للإرسال إلى <strong>${numbers.length}</strong> رقم. اضغط على كل رابط لفتح المحادثة وإرسال الرسالة:
+      📋 جاهز للإرسال إلى <strong>${targets.length}</strong> مراجع${usesName ? ' — كل رسالة باسم صاحبها' : ''}. اضغط على كل رابط لفتح المحادثة:
     </div>
-    <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px;max-height:260px;overflow-y:auto">
-      ${numbers.map((n, i) => `
-        <a href="https://wa.me/${n}?text=${encoded}" target="_blank"
+    <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px;max-height:300px;overflow-y:auto">
+      ${targets.map((t, i) => `
+        <a href="https://wa.me/${t.mob}?text=${encodeURIComponent(personalize(t.name))}" target="_blank"
            style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;text-decoration:none;color:var(--primary);font-weight:600">
-          <span>🟢 إرسال إلى الرقم ${i + 1}</span>
-          <span style="font-family:monospace;font-size:0.8rem;color:var(--text-secondary)">${n}</span>
+          <span>🟢 ${t.name ? t.name : 'الرقم ' + (i + 1)}</span>
+          <span style="font-family:monospace;font-size:0.8rem;color:var(--text-secondary)">${t.mob}</span>
         </a>
       `).join('')}
     </div>`;
