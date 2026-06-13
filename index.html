@@ -3039,7 +3039,19 @@ async function sendNotification() {
       .replace(/\s+/g, '')
       .trim();
     if (!idNo) { alertEl.innerHTML = `<div class="alert alert-error">⚠️ أدخل رقم الهوية</div>`; return; }
-    if (!state.allPatients.find(p => String(p.id_no).trim() === idNo)) {
+    // تحقّق محلياً أولاً، وإلا فابحث على الخادم (لأن القاعدة كبيرة ولا تُحمَّل كاملة)
+    let found = state.allPatients.find(p => String(p.id_no).trim() === idNo);
+    if (!found && sbClient && !DEMO_MODE) {
+      try {
+        const { data, error } = await sbClient
+          .from('patients').select('id_no').eq('id_no', idNo).limit(1);
+        if (error) throw error;
+        found = data && data.length ? data[0] : null;
+      } catch (e) {
+        alertEl.innerHTML = `<div class="alert alert-error">⚠️ تعذّر التحقق من المراجع، حاول مرة أخرى</div>`; return;
+      }
+    }
+    if (!found) {
       alertEl.innerHTML = `<div class="alert alert-error">⚠️ المراجع غير موجود في قاعدة البيانات</div>`; return;
     }
     recipients = [idNo];
