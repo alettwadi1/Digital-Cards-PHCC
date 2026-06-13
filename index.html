@@ -1480,12 +1480,13 @@ input:checked + .slider::before { transform: translateX(20px); }
       <input type="text" id="reg-mobile" dir="ltr" inputmode="numeric" placeholder="05XXXXXXXX" style="text-align:right">
     </div>
     <div class="form-group">
-      <label>نوع تاريخ الميلاد *</label>
-      <div class="cal-toggle" style="display:flex;gap:6px;margin-bottom:8px">
-        <button type="button" id="reg-cal-g-btn" class="cal-chip active" onclick="setRegCalType('g')">ميلادي</button>
-        <button type="button" id="reg-cal-h-btn" class="cal-chip" onclick="setRegCalType('h')">هجري</button>
-      </div>
-      <input type="text" id="reg-dob" dir="ltr" inputmode="numeric" placeholder="مثال: 1990/05/15" style="text-align:right" oninput="autoFormatDateInput(this)">
+      <label>تاريخ الميلاد الميلادي *</label>
+      <input type="text" id="reg-dob-g" dir="ltr" inputmode="numeric" placeholder="مثال: 1990/05/15" style="text-align:right" oninput="onRegDobInput('g')">
+    </div>
+    <div class="form-group">
+      <label>تاريخ الميلاد الهجري *</label>
+      <input type="text" id="reg-dob-h" dir="ltr" inputmode="numeric" placeholder="مثال: 1411/11/20" style="text-align:right" oninput="onRegDobInput('h')">
+      <small style="color:var(--text-muted);display:block;margin-top:4px">يُحسب التاريخ الآخر تلقائياً عند الكتابة في أحد الحقلين</small>
     </div>
     <div id="reg-request-alert"></div>
     <div style="display:flex;gap:10px;margin-top:1rem">
@@ -1795,13 +1796,76 @@ function setCalType(type) {
 
 // ══════════════════════════════════════════ REGISTRATION REQUESTS ══
 
-let regCalType = 'g';
-function setRegCalType(type) {
-  regCalType = type;
-  document.getElementById('reg-cal-g-btn').classList.toggle('active', type === 'g');
-  document.getElementById('reg-cal-h-btn').classList.toggle('active', type === 'h');
-  const inp = document.getElementById('reg-dob');
-  inp.placeholder = type === 'g' ? 'مثال: 1990/05/15' : 'مثال: 1411/11/20';
+// ── تحويل التاريخ بين الميلادي والهجري (تقويم أم القرى عبر Intl) ──
+// يحوّل ميلادي YYYY/M/D إلى هجري YYYY/M/D
+function gregorianToHijri(g) {
+  const norm = normalizeDate(g);
+  const parts = norm.split('/').filter(Boolean);
+  if (parts.length !== 3) return '';
+  const [y, m, d] = parts.map(n => parseInt(n, 10));
+  if (!y || !m || !d || String(y).length !== 4) return '';
+  const date = new Date(Date.UTC(y, m - 1, d));
+  if (isNaN(date.getTime())) return '';
+  try {
+    const fmt = new Intl.DateTimeFormat('en-u-ca-islamic-umalqura', {
+      year: 'numeric', month: 'numeric', day: 'numeric', timeZone: 'UTC'
+    });
+    const map = {};
+    fmt.formatToParts(date).forEach(p => { map[p.type] = p.value; });
+    const hy = parseInt(String(map.year).replace(/\D/g, ''), 10);
+    const hm = parseInt(map.month, 10);
+    const hd = parseInt(map.day, 10);
+    if (!hy || !hm || !hd) return '';
+    return `${hy}/${hm}/${hd}`;
+  } catch (e) { return ''; }
+}
+
+// يحوّل هجري YYYY/M/D إلى ميلادي YYYY/M/D (بحث تقريبي بالعكس)
+function hijriToGregorian(h) {
+  const norm = normalizeDate(h);
+  const parts = norm.split('/').filter(Boolean);
+  if (parts.length !== 3) return '';
+  const [hy, hm, hd] = parts.map(n => parseInt(n, 10));
+  if (!hy || !hm || !hd || String(hy).length !== 4) return '';
+  // تقدير مبدئي للميلادي ثم تصحيحه بالمقارنة العكسية
+  const approxG = Math.floor(hy * 0.970224 + 621.5643);
+  const start = new Date(Date.UTC(approxG - 1, 0, 1));
+  const target = `${hy}/${hm}/${hd}`;
+  for (let i = 0; i < 800; i++) {
+    const d = new Date(start.getTime() + i * 86400000);
+    const gy = d.getUTCFullYear();
+    const gm = d.getUTCMonth() + 1;
+    const gd = d.getUTCDate();
+    if (gregorianToHijri(`${gy}/${gm}/${gd}`) === target) {
+      return `${gy}/${gm}/${gd}`;
+    }
+  }
+  return '';
+}
+
+// عند الكتابة في أحد الحقلين، ننسّقه ونحسب الحقل الآخر تلقائياً
+let regDobUpdating = false;
+function onRegDobInput(source) {
+  if (regDobUpdating) return;
+  const gEl = document.getElementById('reg-dob-g');
+  const hEl = document.getElementById('reg-dob-h');
+  const inp = source === 'g' ? gEl : hEl;
+  autoFormatDateInput(inp);
+  // لا نحوّل إلا عند اكتمال التاريخ (8 أرقام => YYYY/M/D كامل)
+  const digits = inp.value.replace(/\D/g, '');
+  if (digits.length < 8) return;
+  regDobUpdating = true;
+  try {
+    if (source === 'g') {
+      const h = gregorianToHijri(inp.value);
+      if (h) hEl.value = h;
+    } else {
+      const g = hijriToGregorian(inp.value);
+      if (g) gEl.value = g;
+    }
+  } finally {
+    regDobUpdating = false;
+  }
 }
 
 function openRegisterRequestModal() {
@@ -1810,9 +1874,9 @@ function openRegisterRequestModal() {
   document.getElementById('reg-id-no').value = searchId || '';
   document.getElementById('reg-full-name').value = '';
   document.getElementById('reg-mobile').value = '';
-  document.getElementById('reg-dob').value = '';
+  document.getElementById('reg-dob-g').value = '';
+  document.getElementById('reg-dob-h').value = '';
   document.getElementById('reg-request-alert').innerHTML = '';
-  setRegCalType('g');
   openModal('register-request-modal');
 }
 
@@ -1822,10 +1886,12 @@ async function submitRegisterRequest() {
   const idNo = document.getElementById('reg-id-no').value.trim();
   const fullName = document.getElementById('reg-full-name').value.trim();
   const mobile = document.getElementById('reg-mobile').value.trim();
-  const dobRaw = document.getElementById('reg-dob').value;
-  const dob = normalizeDate(dobRaw);
+  const dobGRaw = document.getElementById('reg-dob-g').value;
+  const dobHRaw = document.getElementById('reg-dob-h').value;
+  const dobG = normalizeDate(dobGRaw);
+  const dobH = normalizeDate(dobHRaw);
 
-  if (!idNo || !fullName || !mobile || !dobRaw.trim()) {
+  if (!idNo || !fullName || !mobile || (!dobGRaw.trim() && !dobHRaw.trim())) {
     alertEl.innerHTML = `<div class="alert alert-error">⚠️ يرجى تعبئة جميع الحقول المطلوبة</div>`;
     return;
   }
@@ -1838,9 +1904,9 @@ async function submitRegisterRequest() {
     id_no: idNo,
     full_name: fullName,
     mobile: mobile,
-    dob_type: regCalType === 'h' ? 'hijri' : 'gregorian',
-    dob_g: regCalType === 'g' ? dob : null,
-    dob_h: regCalType === 'h' ? dob : null,
+    dob_type: 'both',
+    dob_g: dobG || null,
+    dob_h: dobH || null,
     status: 'pending',
     created_at: new Date().toISOString()
   };
@@ -1894,9 +1960,10 @@ async function loadRegRequestsTable() {
   }
 
   tbody.innerHTML = rows.map((r, i) => {
-    const dob = r.dob_type === 'hijri'
-      ? `${r.dob_h || '-'} <span style="color:var(--text-muted);font-size:0.7rem">(هجري)</span>`
-      : `${r.dob_g || '-'} <span style="color:var(--text-muted);font-size:0.7rem">(ميلادي)</span>`;
+    const parts = [];
+    if (r.dob_g) parts.push(`${r.dob_g} <span style="color:var(--text-muted);font-size:0.7rem">(ميلادي)</span>`);
+    if (r.dob_h) parts.push(`${r.dob_h} <span style="color:var(--text-muted);font-size:0.7rem">(هجري)</span>`);
+    const dob = parts.length ? parts.join('<br>') : '-';
     return `<tr>
       <td>${i + 1}</td>
       <td>${r.id_no || '-'}</td>
